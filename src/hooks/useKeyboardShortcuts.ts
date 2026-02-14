@@ -55,6 +55,7 @@ export interface ShortcutActions {
   paste: () => void;
   toggleSlur?: () => void;
   toggleNotationPanel?: () => void;
+  showShortcutsDialog?: () => void;
 }
 
 export function useKeyboardShortcuts(actions: ShortcutActions) {
@@ -234,6 +235,13 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
       if (ctrl && e.key === 'n' && !e.shiftKey) {
         e.preventDefault();
         actions.toggleNotationPanel?.();
+        return;
+      }
+
+      // Show keyboard shortcuts dialog (? key)
+      if (e.key === '?' && !ctrl && !e.altKey) {
+        e.preventDefault();
+        actions.showShortcutsDialog?.();
         return;
       }
 

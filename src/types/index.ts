@@ -6,6 +6,12 @@ export type {
   DynamicLevel,
   ArticulationType,
   OrnamentType,
+  BendType,
+  SlideType,
+  HarmonicType,
+  Bend,
+  Slide,
+  Harmonic,
   NoteheadType,
   Lyric,
   TupletInfo,
@@ -33,6 +39,8 @@ export type {
   Part,
   ScoreMeta,
   Score,
+  ChordDiagram,
+  FretMarker,
 } from './score.ts';
 
 export type {

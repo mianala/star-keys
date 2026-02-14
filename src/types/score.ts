@@ -37,7 +37,9 @@ export type ArticulationType =
   | 'accent'
   | 'marcato'
   | 'tenuto'
-  | 'fermata';
+  | 'fermata'
+  | 'palm-mute'
+  | 'let-ring';
 
 export type OrnamentType =
   | 'trill'
@@ -48,6 +50,28 @@ export type OrnamentType =
   | 'tremolo-1'
   | 'tremolo-2'
   | 'tremolo-3';
+
+// ─── Guitar Techniques ──────────────────────────────────────
+
+export type BendType = 'full' | 'half' | 'quarter' | 'pre-bend' | 'release' | 'bend-release';
+
+export type SlideType = 'slide-in-up' | 'slide-in-down' | 'slide-out-up' | 'slide-out-down' | 'shift-slide';
+
+export type HarmonicType = 'natural' | 'artificial' | 'pinch' | 'tap';
+
+export interface Bend {
+  type: BendType;
+  steps?: number; // For microtonal bends, in quarter-tones
+}
+
+export interface Slide {
+  type: SlideType;
+}
+
+export interface Harmonic {
+  type: HarmonicType;
+  pitch?: Pitch; // For artificial harmonics
+}
 
 export type NoteheadType =
   | 'normal'
@@ -105,6 +129,13 @@ export interface Note {
   // Guitar tab specific
   tabString?: number;  // 1-based string number
   tabFret?: number;    // fret number
+
+  // Guitar techniques
+  bend?: Bend;
+  slide?: Slide;
+  harmonic?: Harmonic;
+  hammerOn?: boolean;
+  pullOff?: boolean;
 
   // Percussion specific
   unpitched?: {
@@ -267,6 +298,25 @@ export interface Part {
   measures: Measure[];
 }
 
+// ─── Chord Diagrams ─────────────────────────────────────────
+
+export interface FretMarker {
+  string: number; // 1-based string number
+  fret: number;   // 0 = open, -1 = muted
+}
+
+export interface ChordDiagram {
+  name: string;
+  instrument: string; // reference to instrument id
+  frets: FretMarker[];
+  barre?: {
+    fret: number;
+    fromString: number;
+    toString: number;
+  }[];
+  position?: number; // Starting fret position indicator
+}
+
 // ─── Score ──────────────────────────────────────────────────
 
 export interface ScoreMeta {
@@ -278,4 +328,5 @@ export interface ScoreMeta {
 export interface Score {
   meta: ScoreMeta;
   parts: Part[];
+  chordDiagrams?: ChordDiagram[];
 }

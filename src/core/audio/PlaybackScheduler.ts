@@ -290,7 +290,7 @@ export class PlaybackScheduler {
 
         for (let ni = 0; ni < measure.notes.length; ni++) {
           const noteOrRest = measure.notes[ni];
-          let durBeats = durationBeats(noteOrRest);
+          const durBeats = durationBeats(noteOrRest);
           const fermataMultiplier = hasFermata(noteOrRest) ? 1.75 : 1.0;
           const effectiveDurBeats = durBeats * fermataMultiplier;
 

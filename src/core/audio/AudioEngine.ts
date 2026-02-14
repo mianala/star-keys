@@ -14,6 +14,12 @@ interface PlaybackListener {
   onPositionUpdate?: (measureIndex: number, noteIndex: number) => void;
 }
 
+interface ChannelState {
+  volume: number; // 0-127
+  muted: boolean;
+  solo: boolean;
+}
+
 export class AudioEngine {
   #state: PlaybackState = 'idle';
   #audioContext: AudioContext | null = null;
@@ -27,6 +33,11 @@ export class AudioEngine {
   #listeners: PlaybackListener[] = [];
   #metronomeEnabled = false;
   #metronomGain: GainNode | null = null;
+
+  // Mixer state
+  #channels: Map<number, ChannelState> = new Map();
+  #masterVolume = 100;
+  #score: Score | null = null;
 
   get state() { return this.#state; }
 
@@ -137,6 +148,7 @@ export class AudioEngine {
   async play(score: Score, bpm: number, metronome = false): Promise<void> {
     if (this.#state === 'playing') return;
 
+    this.#score = score;
     const ctx = await this.ensureContext();
     this.#metronomeEnabled = metronome;
 
@@ -172,10 +184,14 @@ export class AudioEngine {
       }
       if (!sf) continue;
 
+      // Apply mixer settings to velocity
+      const effectiveVelocity = this.#calculateVelocity(event.partIndex, event.velocity);
+      if (effectiveVelocity <= 0) continue; // Skip silent notes
+
       const startAt = this.#startTime + event.time;
       sf.start({
         note: event.pitch,
-        velocity: event.velocity,
+        velocity: effectiveVelocity,
         time: startAt,
         duration: event.duration,
       });
@@ -247,6 +263,10 @@ export class AudioEngine {
     return this.#totalTime;
   }
 
+  get currentScore(): Score | null {
+    return this.#score;
+  }
+
   playNotePreview(gmProgram: number, midi: number, duration = 0.3): void {
     const sf = this.#instruments.get(gmProgram);
     if (!sf || !this.#audioContext) return;
@@ -299,11 +319,55 @@ export class AudioEngine {
     this.#animFrameId = requestAnimationFrame(tick);
   }
 
+  // ─── Mixer Controls ───────────────────────────────────────
+
+  setChannelVolume(partIndex: number, volume: number): void {
+    const ch = this.#channels.get(partIndex) ?? { volume: 80, muted: false, solo: false };
+    ch.volume = Math.max(0, Math.min(127, volume));
+    this.#channels.set(partIndex, ch);
+  }
+
+  setChannelMute(partIndex: number, muted: boolean): void {
+    const ch = this.#channels.get(partIndex) ?? { volume: 80, muted: false, solo: false };
+    ch.muted = muted;
+    this.#channels.set(partIndex, ch);
+  }
+
+  setChannelSolo(partIndex: number, solo: boolean): void {
+    const ch = this.#channels.get(partIndex) ?? { volume: 80, muted: false, solo: false };
+    ch.solo = solo;
+    this.#channels.set(partIndex, ch);
+  }
+
+  setMasterVolume(volume: number): void {
+    this.#masterVolume = Math.max(0, Math.min(127, volume));
+  }
+
+  getChannelState(partIndex: number): ChannelState {
+    return this.#channels.get(partIndex) ?? { volume: 80, muted: false, solo: false };
+  }
+
+  // Calculate effective velocity for a note based on mixer settings
+  #calculateVelocity(partIndex: number, baseVelocity: number): number {
+    const ch = this.#channels.get(partIndex);
+    if (!ch) return baseVelocity;
+
+    const hasSolo = Array.from(this.#channels.values()).some((c) => c.solo);
+    const isAudible = !ch.muted && (!hasSolo || ch.solo);
+
+    if (!isAudible) return 0;
+
+    const channelGain = ch.volume / 127;
+    const masterGain = this.#masterVolume / 127;
+    return Math.round(baseVelocity * channelGain * masterGain);
+  }
+
   dispose(): void {
     this.stop();
     this.#audioContext?.close();
     this.#audioContext = null;
     this.#instruments.clear();
     this.#percussionInstrument = null;
+    this.#channels.clear();
   }
 }

@@ -30,6 +30,7 @@ import { DrumPad } from '@/components/percussion/DrumPad.tsx';
 import { VirtualFretboard } from '@/components/guitar/VirtualFretboard.tsx';
 import { SettingsDialog } from '@/components/dialogs/SettingsDialog.tsx';
 import { useToast } from '@/hooks/useToast.ts';
+import { useMIDIInput, midiToStep, getDrumInfo } from '@/hooks/useMIDIInput.ts';
 
 const STEPS_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
@@ -340,6 +341,40 @@ export function Editor() {
     const cmd = new InsertNoteCommand(s, { ...cur }, note);
     executeCommand(cmd);
   }, [editorState.cursor, editorState.selectedDuration, scoreRef, executeCommand]);
+
+  // MIDI Input - setup after insertNote is defined
+  const handleMIDINoteOn = useCallback((midiNote: number) => {
+    const currentPart = scoreRef.current.parts[editorState.cursor.partIndex];
+    if (!currentPart) return;
+
+    if (currentPart.instrument.isPercussion) {
+      // Use drum map for percussion
+      const drumInfo = getDrumInfo(midiNote);
+      if (drumInfo) {
+        insertNote(drumInfo.step);
+      }
+    } else {
+      // Use pitch calculation for melodic instruments
+      const pitchInfo = midiToStep(midiNote);
+      if (pitchInfo) {
+        insertNote(pitchInfo.step);
+      }
+    }
+
+    // Preview the note
+    const engine = audioEngineRef.current;
+    engine.ensureContext().then(() => {
+      const gmProg = currentPart.instrument.gmProgram;
+      engine.loadInstrument(gmProg).then(() => {
+        engine.playNotePreview(gmProg, midiNote, 0.3);
+      });
+    });
+  }, [editorState.cursor.partIndex, insertNote, scoreRef]);
+
+  useMIDIInput({
+    enabled: true,
+    onNoteOn: handleMIDINoteOn,
+  });
 
   const insertRest = useCallback(() => {
     const s = scoreRef.current;
@@ -918,6 +953,7 @@ export function Editor() {
     paste,
     toggleSlur,
     toggleNotationPanel: () => setShowNotation((v) => !v),
+    showShortcutsDialog: () => setShowShortcutsDialog(true),
   }), [dispatch, editorState.zoom, undo, redo, togglePlayback,
     insertNote, insertChordNote, insertRest, deleteAtCursor, moveCursor, switchPart,
     toggleInputMode, cycleVoice, toggleDot, sharpen, flatten, toggleTie,
@@ -1092,7 +1128,22 @@ export function Editor() {
 
       {/* Mixer panel */}
       {showMixer && (
-        <MixerPanel onClose={() => setShowMixer(false)} />
+        <MixerPanel
+          onClose={() => setShowMixer(false)}
+          onVolumeChange={(partIndex, volume) => {
+            audioEngineRef.current.setChannelVolume(partIndex, volume);
+          }}
+          onMuteToggle={(partIndex) => {
+            const engine = audioEngineRef.current;
+            const currentState = engine.getChannelState(partIndex);
+            engine.setChannelMute(partIndex, !currentState.muted);
+          }}
+          onSoloToggle={(partIndex) => {
+            const engine = audioEngineRef.current;
+            const currentState = engine.getChannelState(partIndex);
+            engine.setChannelSolo(partIndex, !currentState.solo);
+          }}
+        />
       )}
 
       {/* Dialogs */}
