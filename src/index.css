@@ -27,8 +27,61 @@ body,
   overflow: hidden;
 }
 
-/* Music notation symbols font support - Noto Music loaded from Google Fonts */
+/* Bravura Music Font - SMuFL compliant */
+@font-face {
+  font-family: 'Bravura';
+  src: url('/fonts/Bravura.woff2') format('woff2'),
+       url('/fonts/Bravura.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BravuraText';
+  src: url('/fonts/BravuraText.woff2') format('woff2'),
+       url('/fonts/BravuraText.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Music notation symbols font support */
 .music-symbol {
-  font-family: 'Noto Music', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
+  font-family: 'Bravura', 'BravuraText', 'Noto Music', 'Segoe UI Symbol', sans-serif;
   font-feature-settings: 'liga' 1;
+}
+
+.music-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Note preview on hover */
+.note-preview {
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+/* Score renderer canvas */
+.score-renderer {
+  position: relative;
+}
+
+.score-renderer svg {
+  display: block;
 }

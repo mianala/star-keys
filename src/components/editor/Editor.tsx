@@ -304,15 +304,28 @@ export function Editor() {
     let targetMeasureIndex = cur.measureIndex;
     let targetMeasure = part.measures[targetMeasureIndex];
 
-    // If we're in insert mode, check if the note fits in the current measure
+    // Auto-extend: check if note fits and auto-add measures as needed
+    // This works in both insert and replace modes when at end of score
     if (editorState.inputMode === 'insert') {
-      // Check all measures from current position onwards
+      // In insert mode: find first measure with space starting from cursor
       while (targetMeasure && !canAddToMeasure(targetMeasure, note, part.measures.slice(0, targetMeasureIndex))) {
         targetMeasureIndex++;
         if (targetMeasureIndex >= part.measures.length) {
-          // Need to add a new measure
+          // Auto-add new measure at the end
           addMeasure(part);
         }
+        targetMeasure = part.measures[targetMeasureIndex];
+      }
+    } else {
+      // In replace mode: if at end of last measure and it would overflow, auto-extend
+      const isAtEndOfMeasure = cur.noteIndex >= (targetMeasure?.notes.length ?? 0) - 1;
+      const isLastMeasure = cur.measureIndex >= part.measures.length - 1;
+      
+      if (isAtEndOfMeasure && isLastMeasure && targetMeasure && 
+          !canAddToMeasure(targetMeasure, note, part.measures.slice(0, targetMeasureIndex))) {
+        // Auto-add new measure
+        targetMeasureIndex++;
+        addMeasure(part);
         targetMeasure = part.measures[targetMeasureIndex];
       }
     }
@@ -410,15 +423,27 @@ export function Editor() {
     let targetMeasureIndex = cur.measureIndex;
     let targetMeasure = part.measures[targetMeasureIndex];
 
-    // If we're in insert mode, check if the rest fits in the current measure
+    // Auto-extend: check if rest fits and auto-add measures as needed
     if (editorState.inputMode === 'insert') {
-      // Check all measures from current position onwards
+      // In insert mode: find first measure with space starting from cursor
       while (targetMeasure && !canAddToMeasure(targetMeasure, rest, part.measures.slice(0, targetMeasureIndex))) {
         targetMeasureIndex++;
         if (targetMeasureIndex >= part.measures.length) {
-          // Need to add a new measure
+          // Auto-add new measure at the end
           addMeasure(part);
         }
+        targetMeasure = part.measures[targetMeasureIndex];
+      }
+    } else {
+      // In replace mode: if at end of last measure and it would overflow, auto-extend
+      const isAtEndOfMeasure = cur.noteIndex >= (targetMeasure?.notes.length ?? 0) - 1;
+      const isLastMeasure = cur.measureIndex >= part.measures.length - 1;
+      
+      if (isAtEndOfMeasure && isLastMeasure && targetMeasure && 
+          !canAddToMeasure(targetMeasure, rest, part.measures.slice(0, targetMeasureIndex))) {
+        // Auto-add new measure
+        targetMeasureIndex++;
+        addMeasure(part);
         targetMeasure = part.measures[targetMeasureIndex];
       }
     }
@@ -1163,6 +1188,45 @@ export function Editor() {
             zoom={editorState.zoom}
             darkMode={editorState.isDarkMode}
             onOsmdReady={onOsmdReady}
+            hoverEnabled={editorState.activeTool === 'note'}
+            onClick={(measureIndex, step, octave) => {
+              const s = scoreRef.current;
+              const cur = editorState.cursor;
+              const part = s.parts[cur.partIndex];
+              if (!part) return;
+
+              // Create note at clicked position
+              const note = createNote(
+                { step, octave },
+                editorState.selectedDuration,
+                cur.voice,
+              );
+
+              // Make sure measure exists
+              while (measureIndex >= part.measures.length) {
+                addMeasure(part);
+              }
+
+              const targetMeasure = part.measures[measureIndex];
+              const targetCursor = { ...cur, measureIndex };
+
+              // Insert the note
+              const cmd = new InsertNoteCommand(s, targetCursor, note);
+              executeCommand(cmd);
+
+              // Update cursor position
+              dispatch({ type: 'SET_CURSOR', cursor: { ...targetCursor, noteIndex: targetMeasure.notes.length - 1 } });
+
+              // Sound preview
+              const engine = audioEngineRef.current;
+              engine.ensureContext().then(() => {
+                const gmProg = part.instrument.gmProgram;
+                engine.loadInstrument(gmProg).then(() => {
+                  const midi = (octave + 1) * 12 + ({ C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[step] ?? 0);
+                  engine.playNotePreview(gmProg, midi);
+                });
+              });
+            }}
           />
           {isDragOver && (
             <div className="drop-overlay">Drop MusicXML file to open</div>
