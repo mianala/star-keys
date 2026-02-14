@@ -1009,3 +1009,329 @@
   font-size: 11px;
   color: var(--text-secondary);
 }
+
+/* ─── Notation Panel ─────────────────────────────────────── */
+
+.notation-panel {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 6px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.notation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.notation-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notation-inline-form {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.notation-input {
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  width: 80px;
+}
+
+.notation-input-sm {
+  width: 50px;
+}
+
+.notation-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.notation-btn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+/* ─── Toast Notifications ────────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  bottom: 60px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  animation: toast-in 0.3s ease;
+}
+
+.toast-info { background: #4a7cff; }
+.toast-success { background: #22c55e; }
+.toast-error { background: #ef4444; }
+.toast-warning { background: #f59e0b; color: #1a1a1a; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Settings Dialog ────────────────────────────────────── */
+
+.settings-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+
+.settings-tab {
+  padding: 8px 16px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.settings-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.settings-section {
+  margin-bottom: 16px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.settings-label {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.settings-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-control input[type="range"] {
+  width: 100px;
+}
+
+.settings-control select,
+.settings-control input[type="number"] {
+  padding: 3px 6px;
+  font-size: 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ─── Drum Pad ───────────────────────────────────────────── */
+
+.drum-pad-container {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+
+.drum-pad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  max-width: 400px;
+}
+
+.drum-pad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--btn-bg);
+  cursor: pointer;
+  transition: transform 0.05s, background 0.05s;
+  min-height: 48px;
+}
+
+.drum-pad:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--pad-color, var(--accent));
+}
+
+.drum-pad.active {
+  transform: scale(0.95);
+  background: var(--pad-color, var(--accent));
+  border-color: var(--pad-color, var(--accent));
+  color: #fff;
+}
+
+.drum-pad-label {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.drum-pad-name {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.drum-pad.active .drum-pad-name {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ─── Virtual Fretboard ──────────────────────────────────── */
+
+.fretboard-container {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+
+.fretboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: max-content;
+}
+
+.fretboard-markers {
+  display: flex;
+  height: 12px;
+}
+
+.fretboard-marker-cell {
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fretboard-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.fretboard-string {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  position: relative;
+}
+
+.fretboard-string::after {
+  content: '';
+  position: absolute;
+  left: 56px;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--text-muted);
+  pointer-events: none;
+}
+
+.fretboard-tuning-label {
+  width: 20px;
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.fretboard-cell {
+  width: 36px;
+  height: 20px;
+  border: none;
+  border-right: 1px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-primary);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.fretboard-cell.nut {
+  width: 24px;
+  border-right: 3px solid var(--text-secondary);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.fretboard-cell.capo {
+  background: var(--bg-tertiary);
+}
+
+.fretboard-cell:hover {
+  background: rgba(74, 124, 255, 0.15);
+  border-radius: 50%;
+}
+
+.fretboard-cell.active {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.fretboard-fret-numbers {
+  display: flex;
+  height: 14px;
+}
+
+.fretboard-fret-num {
+  width: 36px;
+  font-size: 8px;
+  color: var(--text-muted);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.fretboard-fret-num:first-child {
+  width: 24px;
+}

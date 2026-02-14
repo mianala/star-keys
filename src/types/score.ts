@@ -39,6 +39,16 @@ export type ArticulationType =
   | 'tenuto'
   | 'fermata';
 
+export type OrnamentType =
+  | 'trill'
+  | 'mordent'
+  | 'inverted-mordent'
+  | 'turn'
+  | 'inverted-turn'
+  | 'tremolo-1'
+  | 'tremolo-2'
+  | 'tremolo-3';
+
 export type NoteheadType =
   | 'normal'
   | 'x'
@@ -58,6 +68,22 @@ export interface Pitch {
 
 // ─── Note ───────────────────────────────────────────────────
 
+// ─── Lyric ──────────────────────────────────────────────────
+
+export interface Lyric {
+  text: string;
+  syllabic?: 'single' | 'begin' | 'middle' | 'end';
+  verse: number; // 1-based verse number
+}
+
+// ─── Tuplet ─────────────────────────────────────────────────
+
+export interface TupletInfo {
+  actualNotes: number; // e.g. 3 (triplet)
+  normalNotes: number; // e.g. 2
+  bracket?: 'start' | 'stop';
+}
+
 export interface Note {
   id: string;
   type: 'note';
@@ -68,9 +94,13 @@ export interface Note {
   staff?: number;
   accidental?: AccidentalType;
   tie?: 'start' | 'stop' | 'start-stop';
+  slur?: 'start' | 'stop' | 'start-stop';
   isChord?: boolean;
   articulations?: ArticulationType[];
+  ornaments?: OrnamentType[];
   notehead?: NoteheadType;
+  lyrics?: Lyric[];
+  tuplet?: TupletInfo;
 
   // Guitar tab specific
   tabString?: number;  // 1-based string number
@@ -144,11 +174,44 @@ export interface RehearsalDirection {
   text: string;
 }
 
+export interface WordsDirection {
+  kind: 'words';
+  text: string;
+}
+
+export interface HarmonyDirection {
+  kind: 'harmony';
+  root: { step: Step; alter?: number };
+  chordKind: string; // 'major', 'minor', 'dominant', 'diminished', 'augmented', etc.
+  bass?: { step: Step; alter?: number };
+  text?: string; // display text override, e.g. "Cmaj7"
+}
+
+export type NavigationMark =
+  | 'segno'
+  | 'coda'
+  | 'dacapo'
+  | 'dalsegno'
+  | 'dacapo-al-coda'
+  | 'dacapo-al-fine'
+  | 'dalsegno-al-coda'
+  | 'dalsegno-al-fine'
+  | 'fine'
+  | 'tocoda';
+
+export interface NavigationDirection {
+  kind: 'navigation';
+  mark: NavigationMark;
+}
+
 export type Direction =
   | TempoDirection
   | DynamicDirection
   | WedgeDirection
-  | RehearsalDirection;
+  | RehearsalDirection
+  | WordsDirection
+  | HarmonyDirection
+  | NavigationDirection;
 
 // ─── Barline ────────────────────────────────────────────────
 

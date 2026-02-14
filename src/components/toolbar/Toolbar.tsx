@@ -1,5 +1,5 @@
 import { useEditor } from '@/stores/EditorContext.tsx';
-import type { NoteDuration, ArticulationType } from '@/types/index.ts';
+import type { NoteDuration, ArticulationType, OrnamentType } from '@/types/index.ts';
 
 const DURATIONS: { label: string; value: NoteDuration; key: string }[] = [
   { label: '𝅝', value: 'whole', key: '1' },
@@ -18,8 +18,20 @@ const ARTICULATIONS: { label: string; value: ArticulationType; title: string }[]
   { label: '𝄐', value: 'fermata', title: 'Fermata' },
 ];
 
+const ORNAMENTS: { label: string; value: OrnamentType; title: string }[] = [
+  { label: 'tr', value: 'trill', title: 'Trill' },
+  { label: '𝆖', value: 'mordent', title: 'Mordent' },
+  { label: '𝆗', value: 'inverted-mordent', title: 'Inverted Mordent' },
+  { label: '𝆗', value: 'turn', title: 'Turn' },
+  { label: '𝆘', value: 'inverted-turn', title: 'Inverted Turn' },
+  { label: '≋1', value: 'tremolo-1', title: 'Tremolo (1 beam)' },
+  { label: '≋2', value: 'tremolo-2', title: 'Tremolo (2 beams)' },
+  { label: '≋3', value: 'tremolo-3', title: 'Tremolo (3 beams)' },
+];
+
 interface ToolbarProps {
   onArticulation?: (art: ArticulationType) => void;
+  onOrnament?: (orn: OrnamentType) => void;
   onDot?: () => void;
   onSharp?: () => void;
   onFlat?: () => void;
@@ -27,12 +39,12 @@ interface ToolbarProps {
   onTie?: () => void;
 }
 
-export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onTie }: ToolbarProps) {
+export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, onNatural, onTie }: ToolbarProps) {
   const { editorState, dispatch } = useEditor();
 
   return (
-    <div className="toolbar">
-      <div className="toolbar-group">
+    <div className="toolbar" role="toolbar" aria-label="Score editing toolbar">
+      <div className="toolbar-group" role="group" aria-label="Duration">
         <span className="toolbar-label">Duration</span>
         {DURATIONS.map((d) => (
           <button
@@ -40,6 +52,8 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
             className={`toolbar-btn ${editorState.selectedDuration === d.value ? 'active' : ''}`}
             onClick={() => dispatch({ type: 'SET_DURATION', duration: d.value })}
             title={`${d.value} (${d.key})`}
+            aria-label={`${d.value} note duration`}
+            aria-pressed={editorState.selectedDuration === d.value}
           >
             {d.label}
           </button>
@@ -48,12 +62,14 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="Input tool">
         <span className="toolbar-label">Tool</span>
         <button
           className={`toolbar-btn ${editorState.activeTool === 'note' ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'note' })}
           title="Note input"
+          aria-label="Note input tool"
+          aria-pressed={editorState.activeTool === 'note'}
         >
           N
         </button>
@@ -61,6 +77,8 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
           className={`toolbar-btn ${editorState.activeTool === 'rest' ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'rest' })}
           title="Rest input (0)"
+          aria-label="Rest input tool"
+          aria-pressed={editorState.activeTool === 'rest'}
         >
           𝄾
         </button>
@@ -68,6 +86,8 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
           className={`toolbar-btn ${editorState.activeTool === 'select' ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_ACTIVE_TOOL', tool: 'select' })}
           title="Select"
+          aria-label="Selection tool"
+          aria-pressed={editorState.activeTool === 'select'}
         >
           ↖
         </button>
@@ -75,24 +95,25 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="Note modifiers">
         <span className="toolbar-label">Modify</span>
-        <button className="toolbar-btn" title="Dot (.)" onClick={onDot}>.</button>
-        <button className="toolbar-btn" title="Sharp (+)" onClick={onSharp}>♯</button>
-        <button className="toolbar-btn" title="Flat (-)" onClick={onFlat}>♭</button>
-        <button className="toolbar-btn" title="Natural" onClick={onNatural}>♮</button>
-        <button className="toolbar-btn" title="Tie (T)" onClick={onTie}>⁀</button>
+        <button className="toolbar-btn" title="Dot (.)" aria-label="Toggle dot" onClick={onDot}>.</button>
+        <button className="toolbar-btn" title="Sharp (+)" aria-label="Sharpen note" onClick={onSharp}>♯</button>
+        <button className="toolbar-btn" title="Flat (-)" aria-label="Flatten note" onClick={onFlat}>♭</button>
+        <button className="toolbar-btn" title="Natural" aria-label="Natural" onClick={onNatural}>♮</button>
+        <button className="toolbar-btn" title="Tie (T)" aria-label="Toggle tie" onClick={onTie}>⁀</button>
       </div>
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="Articulations">
         <span className="toolbar-label">Articulation</span>
         {ARTICULATIONS.map((a) => (
           <button
             key={a.value}
             className="articulation-btn"
             title={a.title}
+            aria-label={a.title}
             onClick={() => onArticulation?.(a.value)}
           >
             {a.label}
@@ -102,12 +123,32 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="Ornaments">
+        <span className="toolbar-label">Ornament</span>
+        {ORNAMENTS.map((o) => (
+          <button
+            key={o.value}
+            className="articulation-btn"
+            title={o.title}
+            aria-label={o.title}
+            onClick={() => onOrnament?.(o.value)}
+            style={{ fontSize: 10 }}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="toolbar-separator" />
+
+      <div className="toolbar-group" role="group" aria-label="Voice selection">
         <span className="toolbar-label">Voice</span>
         <button
           className={`toolbar-btn ${editorState.cursor.voice === 1 ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_CURSOR', cursor: { ...editorState.cursor, voice: 1 } })}
           title="Voice 1"
+          aria-label="Voice 1"
+          aria-pressed={editorState.cursor.voice === 1}
         >
           1
         </button>
@@ -115,6 +156,8 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
           className={`toolbar-btn ${editorState.cursor.voice === 2 ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_CURSOR', cursor: { ...editorState.cursor, voice: 2 } })}
           title="Voice 2"
+          aria-label="Voice 2"
+          aria-pressed={editorState.cursor.voice === 2}
         >
           2
         </button>
@@ -122,12 +165,13 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="Input mode">
         <span className="toolbar-label">Mode</span>
         <button
           className={`toolbar-btn ${editorState.inputMode === 'insert' ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_INPUT_MODE', mode: editorState.inputMode === 'insert' ? 'replace' : 'insert' })}
           title="Insert/Replace (I)"
+          aria-label={`${editorState.inputMode} mode, click to toggle`}
         >
           {editorState.inputMode === 'insert' ? 'INS' : 'REP'}
         </button>
@@ -135,7 +179,7 @@ export function Toolbar({ onArticulation, onDot, onSharp, onFlat, onNatural, onT
 
       <div className="toolbar-separator" />
 
-      <div className="toolbar-group">
+      <div className="toolbar-group" role="group" aria-label="View controls">
         <span className="toolbar-label">View</span>
         <button
           className="toolbar-btn"

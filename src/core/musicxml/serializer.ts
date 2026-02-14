@@ -8,6 +8,7 @@ import type {
   MeasureAttributes,
   Direction,
   Barline,
+  HarmonyDirection,
 } from '@/types/index.ts';
 
 // ─── XML Helpers ────────────────────────────────────────────
@@ -132,7 +133,7 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
       parts.push(el('accidental', note.accidental));
     }
 
-    // Notations (tied, technical)
+    // Notations (tied, articulations, ornaments, technical)
     const notations: string[] = [];
     if (note.tie) {
       if (note.tie === 'start' || note.tie === 'start-stop') {
@@ -141,6 +142,40 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
       if (note.tie === 'stop' || note.tie === 'start-stop') {
         notations.push(el('tied', '', { type: 'stop' }));
       }
+    }
+
+    if (note.articulations && note.articulations.length > 0) {
+      const artParts: string[] = [];
+      for (const art of note.articulations) {
+        if (art === 'marcato') artParts.push('<strong-accent/>');
+        else artParts.push(`<${art}/>`);
+      }
+      notations.push(el('articulations', artParts.join('')));
+    }
+
+    if (note.ornaments && note.ornaments.length > 0) {
+      const ornParts: string[] = [];
+      for (const orn of note.ornaments) {
+        if (orn === 'trill') ornParts.push('<trill-mark/>');
+        else if (orn === 'tremolo-1') ornParts.push(el('tremolo', '1', { type: 'single' }));
+        else if (orn === 'tremolo-2') ornParts.push(el('tremolo', '2', { type: 'single' }));
+        else if (orn === 'tremolo-3') ornParts.push(el('tremolo', '3', { type: 'single' }));
+        else ornParts.push(`<${orn}/>`);
+      }
+      notations.push(el('ornaments', ornParts.join('')));
+    }
+
+    if (note.slur) {
+      if (note.slur === 'start' || note.slur === 'start-stop') {
+        notations.push(el('slur', '', { type: 'start' }));
+      }
+      if (note.slur === 'stop' || note.slur === 'start-stop') {
+        notations.push(el('slur', '', { type: 'stop' }));
+      }
+    }
+
+    if (note.tuplet?.bracket) {
+      notations.push(el('tuplet', '', { type: note.tuplet.bracket }));
     }
 
     if (note.tabString !== undefined || note.tabFret !== undefined) {
@@ -152,6 +187,24 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
 
     if (notations.length > 0) {
       parts.push(el('notations', notations.join('')));
+    }
+
+    // Lyrics
+    if (note.lyrics) {
+      for (const lyric of note.lyrics) {
+        const lyricParts: string[] = [];
+        if (lyric.syllabic) lyricParts.push(el('syllabic', lyric.syllabic));
+        lyricParts.push(el('text', lyric.text));
+        parts.push(el('lyric', lyricParts.join(''), { number: String(lyric.verse) }));
+      }
+    }
+
+    // Time modification (tuplet)
+    if (note.tuplet) {
+      parts.push(el('time-modification',
+        el('actual-notes', String(note.tuplet.actualNotes)) +
+        el('normal-notes', String(note.tuplet.normalNotes))
+      ));
     }
   } else {
     // Rest
@@ -168,7 +221,31 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
   return el('note', parts.join(''));
 }
 
+const NAV_MARK_TEXT: Record<string, string> = {
+  segno: '', coda: '', fine: 'Fine',
+  dacapo: 'D.C.', dalsegno: 'D.S.',
+  'dacapo-al-coda': 'D.C. al Coda', 'dacapo-al-fine': 'D.C. al Fine',
+  'dalsegno-al-coda': 'D.S. al Coda', 'dalsegno-al-fine': 'D.S. al Fine',
+  tocoda: 'To Coda',
+};
+
+function serializeHarmony(dir: HarmonyDirection): string {
+  const rootParts = el('root-step', dir.root.step) +
+    (dir.root.alter !== undefined ? el('root-alter', String(dir.root.alter)) : '');
+  let content = el('root', rootParts) + el('kind', dir.chordKind);
+  if (dir.bass) {
+    const bassParts = el('bass-step', dir.bass.step) +
+      (dir.bass.alter !== undefined ? el('bass-alter', String(dir.bass.alter)) : '');
+    content += el('bass', bassParts);
+  }
+  return el('harmony', content);
+}
+
 function serializeDirection(dir: Direction): string {
+  if (dir.kind === 'harmony') {
+    return serializeHarmony(dir);
+  }
+
   const parts: string[] = [];
 
   switch (dir.kind) {
@@ -185,6 +262,21 @@ function serializeDirection(dir: Direction): string {
     case 'rehearsal':
       parts.push(el('direction-type', el('rehearsal', dir.text)));
       break;
+    case 'words':
+      parts.push(el('direction-type', el('words', dir.text)));
+      break;
+    case 'navigation': {
+      const mark = dir.mark;
+      if (mark === 'segno') {
+        parts.push(el('direction-type', '<segno/>'));
+      } else if (mark === 'coda') {
+        parts.push(el('direction-type', '<coda/>'));
+      } else {
+        const txt = NAV_MARK_TEXT[mark] ?? mark;
+        if (txt) parts.push(el('direction-type', el('words', txt)));
+      }
+      break;
+    }
   }
 
   return el('direction', parts.join(''));

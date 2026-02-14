@@ -120,6 +120,30 @@ export function InspectorPanel() {
                     <span className="inspector-value">{(noteAtCursor as Note).articulations!.join(', ')}</span>
                   </div>
                 )}
+                {(noteAtCursor as Note).ornaments && (noteAtCursor as Note).ornaments!.length > 0 && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Ornaments</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).ornaments!.join(', ')}</span>
+                  </div>
+                )}
+                {(noteAtCursor as Note).slur && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Slur</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).slur}</span>
+                  </div>
+                )}
+                {(noteAtCursor as Note).lyrics && (noteAtCursor as Note).lyrics!.length > 0 && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Lyrics</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).lyrics!.map((l) => l.text).join(' ')}</span>
+                  </div>
+                )}
+                {(noteAtCursor as Note).tuplet && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Tuplet</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).tuplet!.actualNotes}:{(noteAtCursor as Note).tuplet!.normalNotes}</span>
+                  </div>
+                )}
               </>
             )}
             <div className="inspector-row">
@@ -162,6 +186,24 @@ export function InspectorPanel() {
                 <span className="inspector-value">{currentTempo.bpm} BPM</span>
               </div>
             )}
+            {measure?.directions.filter((d) => d.kind === 'harmony').map((d, i) => (
+              <div className="inspector-row" key={`harm-${i}`}>
+                <span className="inspector-label">Chord</span>
+                <span className="inspector-value">{d.kind === 'harmony' ? (d.text ?? `${d.root.step}${d.root.alter === 1 ? '#' : d.root.alter === -1 ? 'b' : ''} ${d.chordKind}`) : ''}</span>
+              </div>
+            ))}
+            {measure?.directions.filter((d) => d.kind === 'words').map((d, i) => (
+              <div className="inspector-row" key={`words-${i}`}>
+                <span className="inspector-label">Text</span>
+                <span className="inspector-value" style={{ fontStyle: 'italic' }}>{d.kind === 'words' ? d.text : ''}</span>
+              </div>
+            ))}
+            {measure?.directions.filter((d) => d.kind === 'rehearsal').map((d, i) => (
+              <div className="inspector-row" key={`reh-${i}`}>
+                <span className="inspector-label">Rehearsal</span>
+                <span className="inspector-value" style={{ fontWeight: 'bold' }}>{d.kind === 'rehearsal' ? d.text : ''}</span>
+              </div>
+            ))}
           </div>
         </>
       )}

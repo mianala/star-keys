@@ -8,6 +8,9 @@ import type {
   Pitch,
   NoteDuration,
   AccidentalType,
+  OrnamentType,
+  Lyric,
+  TupletInfo,
   Clef,
   ClefSign,
   KeySignature,
@@ -15,6 +18,7 @@ import type {
   MeasureAttributes,
   Direction,
   DynamicDirection,
+  Step,
   Barline,
   BarlineType,
   InstrumentConfig,
@@ -211,6 +215,76 @@ function parseMeasure(
       const tabString = techEl ? num(techEl, 'string') ?? undefined : undefined;
       const tabFret = techEl ? num(techEl, 'fret') ?? undefined : undefined;
 
+      // Ornaments
+      const ornamentEl = noteEl.querySelector('notations ornaments');
+      let ornaments: OrnamentType[] | undefined;
+      if (ornamentEl) {
+        ornaments = [];
+        if (ornamentEl.querySelector('trill-mark')) ornaments.push('trill');
+        if (ornamentEl.querySelector('mordent')) ornaments.push('mordent');
+        if (ornamentEl.querySelector('inverted-mordent')) ornaments.push('inverted-mordent');
+        if (ornamentEl.querySelector('turn')) ornaments.push('turn');
+        if (ornamentEl.querySelector('inverted-turn')) ornaments.push('inverted-turn');
+        const tremoloEl = ornamentEl.querySelector('tremolo');
+        if (tremoloEl) {
+          const beams = Number(tremoloEl.textContent ?? '1');
+          if (beams === 1) ornaments.push('tremolo-1');
+          else if (beams === 2) ornaments.push('tremolo-2');
+          else ornaments.push('tremolo-3');
+        }
+        if (ornaments.length === 0) ornaments = undefined;
+      }
+
+      // Articulations
+      const artEl = noteEl.querySelector('notations articulations');
+      let articulations: Note['articulations'];
+      if (artEl) {
+        articulations = [];
+        if (artEl.querySelector('staccato')) articulations.push('staccato');
+        if (artEl.querySelector('staccatissimo')) articulations.push('staccatissimo');
+        if (artEl.querySelector('accent')) articulations.push('accent');
+        if (artEl.querySelector('strong-accent')) articulations.push('marcato');
+        if (artEl.querySelector('tenuto')) articulations.push('tenuto');
+        if (artEl.querySelector('fermata')) articulations.push('fermata');
+        if (articulations.length === 0) articulations = undefined;
+      }
+
+      // Slurs
+      let slur: Note['slur'];
+      const slurEls = noteEl.querySelectorAll('notations slur');
+      const slurTypes = Array.from(slurEls).map((s) => s.getAttribute('type'));
+      if (slurTypes.includes('start') && slurTypes.includes('stop')) {
+        slur = 'start-stop';
+      } else if (slurTypes.includes('start')) {
+        slur = 'start';
+      } else if (slurTypes.includes('stop')) {
+        slur = 'stop';
+      }
+
+      // Lyrics
+      let lyrics: Lyric[] | undefined;
+      const lyricEls = noteEl.querySelectorAll('lyric');
+      if (lyricEls.length > 0) {
+        lyrics = [];
+        for (const lyricEl of lyricEls) {
+          const lyricText = text(lyricEl, 'text') ?? '';
+          const syllabic = text(lyricEl, 'syllabic') as Lyric['syllabic'] ?? undefined;
+          const verseNum = Number(lyricEl.getAttribute('number') ?? '1');
+          lyrics.push({ text: lyricText, syllabic, verse: verseNum });
+        }
+      }
+
+      // Tuplet
+      let tuplet: TupletInfo | undefined;
+      const timeModEl = noteEl.querySelector('time-modification');
+      if (timeModEl) {
+        const actualNotes = num(timeModEl, 'actual-notes') ?? 3;
+        const normalNotes = num(timeModEl, 'normal-notes') ?? 2;
+        const tupletEl = noteEl.querySelector('notations tuplet');
+        const bracket = tupletEl?.getAttribute('type') as TupletInfo['bracket'] ?? undefined;
+        tuplet = { actualNotes, normalNotes, bracket };
+      }
+
       const note: Note = {
         id: uid(),
         type: 'note',
@@ -220,7 +294,12 @@ function parseMeasure(
         voice,
         accidental,
         tie,
+        slur,
         isChord: isChord || undefined,
+        articulations,
+        ornaments,
+        lyrics,
+        tuplet,
         unpitched,
         tabString: tabString ?? undefined,
         tabFret: tabFret ?? undefined,
@@ -280,6 +359,65 @@ function parseMeasure(
       directions.push({
         kind: 'wedge',
         wedgeType: wType as 'crescendo' | 'diminuendo' | 'stop',
+      });
+    }
+
+    // Words / expression text (only if not already captured as tempo)
+    const wordsEl = dirEl.querySelector('direction-type words');
+    if (wordsEl && !soundEl?.getAttribute('tempo')) {
+      const wordsText = wordsEl.textContent ?? '';
+      // Check for navigation marks
+      const lower = wordsText.toLowerCase().trim();
+      if (lower === 'fine') {
+        directions.push({ kind: 'navigation', mark: 'fine' });
+      } else if (lower === 'd.c.' || lower === 'da capo') {
+        directions.push({ kind: 'navigation', mark: 'dacapo' });
+      } else if (lower === 'd.s.' || lower === 'dal segno') {
+        directions.push({ kind: 'navigation', mark: 'dalsegno' });
+      } else if (lower.includes('d.c.') && lower.includes('coda')) {
+        directions.push({ kind: 'navigation', mark: 'dacapo-al-coda' });
+      } else if (lower.includes('d.c.') && lower.includes('fine')) {
+        directions.push({ kind: 'navigation', mark: 'dacapo-al-fine' });
+      } else if (lower.includes('d.s.') && lower.includes('coda')) {
+        directions.push({ kind: 'navigation', mark: 'dalsegno-al-coda' });
+      } else if (lower.includes('d.s.') && lower.includes('fine')) {
+        directions.push({ kind: 'navigation', mark: 'dalsegno-al-fine' });
+      } else if (lower === 'to coda' || lower === 'tocoda') {
+        directions.push({ kind: 'navigation', mark: 'tocoda' });
+      } else if (wordsText.trim()) {
+        directions.push({ kind: 'words', text: wordsText.trim() });
+      }
+    }
+
+    // Segno / coda symbols
+    if (dirEl.querySelector('direction-type segno')) {
+      directions.push({ kind: 'navigation', mark: 'segno' });
+    }
+    if (dirEl.querySelector('direction-type coda')) {
+      directions.push({ kind: 'navigation', mark: 'coda' });
+    }
+  }
+
+  // Harmony (chord symbols)
+  for (const harmEl of measureEl.querySelectorAll('harmony')) {
+    const rootEl = harmEl.querySelector('root');
+    if (rootEl) {
+      const rootStep = (text(rootEl, 'root-step') ?? 'C') as Step;
+      const rootAlter = num(rootEl, 'root-alter') ?? undefined;
+      const chordKind = text(harmEl, 'kind') ?? 'major';
+      const bassEl = harmEl.querySelector('bass');
+      let bass: { step: Step; alter?: number } | undefined;
+      if (bassEl) {
+        bass = {
+          step: (text(bassEl, 'bass-step') ?? 'C') as Step,
+          alter: num(bassEl, 'bass-alter') ?? undefined,
+        };
+      }
+      directions.push({
+        kind: 'harmony',
+        root: { step: rootStep, alter: rootAlter },
+        chordKind,
+        bass,
       });
     }
   }

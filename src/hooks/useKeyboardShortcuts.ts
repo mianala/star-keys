@@ -53,6 +53,8 @@ export interface ShortcutActions {
   copy: () => void;
   cut: () => void;
   paste: () => void;
+  toggleSlur?: () => void;
+  toggleNotationPanel?: () => void;
 }
 
 export function useKeyboardShortcuts(actions: ShortcutActions) {
@@ -218,6 +220,20 @@ export function useKeyboardShortcuts(actions: ShortcutActions) {
       if (!ctrl && !e.altKey && !e.shiftKey && e.key === 'v') {
         e.preventDefault();
         actions.cycleVoice();
+        return;
+      }
+
+      // Toggle slur (L)
+      if (!ctrl && !e.altKey && !e.shiftKey && e.key === 'l') {
+        e.preventDefault();
+        actions.toggleSlur?.();
+        return;
+      }
+
+      // Toggle notation panel (N with Ctrl)
+      if (ctrl && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        actions.toggleNotationPanel?.();
         return;
       }
 

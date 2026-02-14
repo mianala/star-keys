@@ -2,7 +2,9 @@ import { useCallback, useRef } from 'react';
 import type { Score } from '@/types/index.ts';
 import { parseMusicXML } from '@/core/musicxml/index.ts';
 import { createScore, PIANO } from '@/core/score/index.ts';
-import { downloadMidi } from '@/core/midi/index.ts';
+import { downloadMidi, importMidi } from '@/core/midi/index.ts';
+import { jsPDF } from 'jspdf';
+import 'svg2pdf.js';
 import JSZip from 'jszip';
 
 interface UseFileIOOptions {
@@ -22,6 +24,13 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
 
   const openFile = useCallback(async (file: File) => {
     try {
+      if (file.name.endsWith('.mid') || file.name.endsWith('.midi')) {
+        const buffer = await file.arrayBuffer();
+        const parsed = importMidi(buffer);
+        setScore(parsed);
+        return;
+      }
+
       if (file.name.endsWith('.mxl')) {
         const zip = await JSZip.loadAsync(file);
         let xmlContent: string | null = null;
@@ -62,7 +71,7 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
       }
     } catch (err) {
       console.error('Failed to open file:', err);
-      alert(`Failed to open file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      throw err instanceof Error ? err : new Error('Failed to open file');
     }
   }, [setScore]);
 
@@ -70,7 +79,7 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
     if (!fileInputRef.current) {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.xml,.musicxml,.mxl';
+      input.accept = '.xml,.musicxml,.mxl,.mid,.midi';
       input.style.display = 'none';
       input.addEventListener('change', () => {
         const file = input.files?.[0];
@@ -122,7 +131,7 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
     // Find the OSMD SVG element in the DOM
     const svgEl = document.querySelector('.score-renderer svg');
     if (!svgEl) {
-      alert('No score rendered to export');
+      throw new Error('No score rendered to export');
       return;
     }
 
@@ -143,7 +152,7 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
   const exportAsPNG = useCallback(() => {
     const svgEl = document.querySelector('.score-renderer svg');
     if (!svgEl) {
-      alert('No score rendered to export');
+      throw new Error('No score rendered to export');
       return;
     }
 
@@ -180,9 +189,31 @@ export function useFileIO({ setScore, musicXML, scoreTitle, score, tempo = 120 }
     img.src = svgUrl;
   }, [scoreTitle]);
 
+  const exportAsPDF = useCallback(async () => {
+    const svgEl = document.querySelector('.score-renderer svg') as SVGElement | null;
+    if (!svgEl) {
+      throw new Error('No score rendered to export');
+    }
+
+    const bbox = svgEl.getBoundingClientRect();
+    const width = bbox.width;
+    const height = bbox.height;
+
+    // Create PDF in landscape or portrait depending on aspect ratio
+    const orientation = width > height ? 'landscape' : 'portrait';
+    const doc = new jsPDF({
+      orientation,
+      unit: 'pt',
+      format: [width, height],
+    });
+
+    await doc.svg(svgEl, { x: 0, y: 0, width, height });
+    doc.save(`${scoreTitle || 'score'}.pdf`);
+  }, [scoreTitle]);
+
   const printScore = useCallback(() => {
     window.print();
   }, []);
 
-  return { newScore, triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, printScore };
+  return { newScore, triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, exportAsPDF, printScore };
 }

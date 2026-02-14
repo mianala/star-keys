@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback, useState, useEffect } from 'react';
 import { OpenSheetMusicDisplay as OSMD } from 'opensheetmusicdisplay';
-import type { NoteDuration, Step, CursorPosition, Note, NoteOrRest, ArticulationType } from '@/types/index.ts';
+import type { NoteDuration, Step, CursorPosition, Note, NoteOrRest, ArticulationType, OrnamentType, NavigationMark, Lyric, TupletInfo } from '@/types/index.ts';
 import { useEditor } from '@/stores/EditorContext.tsx';
 import type { MoveCursorDirection } from '@/stores/EditorContext.tsx';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts.ts';
@@ -13,6 +13,7 @@ import {
 } from '@/core/score/index.ts';
 import { AudioEngine } from '@/core/audio/index.ts';
 import { parseMusicXML } from '@/core/musicxml/index.ts';
+import { importMidi } from '@/core/midi/index.ts';
 import { ScoreRenderer } from './ScoreRenderer.tsx';
 import { Toolbar } from '@/components/toolbar/Toolbar.tsx';
 import { PartsPanel } from '@/components/sidebar/PartsPanel.tsx';
@@ -24,6 +25,11 @@ import { TransposeDialog } from '@/components/dialogs/TransposeDialog.tsx';
 import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsDialog.tsx';
 import { MixerPanel } from '@/components/mixer/MixerPanel.tsx';
 import { VirtualPiano } from '@/components/piano/VirtualPiano.tsx';
+import { NotationPanel } from '@/components/notation/NotationPanel.tsx';
+import { DrumPad } from '@/components/percussion/DrumPad.tsx';
+import { VirtualFretboard } from '@/components/guitar/VirtualFretboard.tsx';
+import { SettingsDialog } from '@/components/dialogs/SettingsDialog.tsx';
+import { useToast } from '@/hooks/useToast.ts';
 
 const STEPS_ORDER: Step[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
@@ -106,6 +112,11 @@ export function Editor() {
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [showMixer, setShowMixer] = useState(false);
   const [showPiano, setShowPiano] = useState(false);
+  const [showNotation, setShowNotation] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Toast notifications
+  const { toasts, addToast } = useToast();
 
   // Drag & drop
   const [isDragOver, setIsDragOver] = useState(false);
@@ -158,7 +169,7 @@ export function Editor() {
     osmdRef.current = osmd;
   }, []);
 
-  const { triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, printScore } = useFileIO({
+  const { triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, exportAsPDF, printScore } = useFileIO({
     setScore,
     musicXML,
     scoreTitle: score.meta.title,
@@ -180,17 +191,30 @@ export function Editor() {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && (file.name.endsWith('.xml') || file.name.endsWith('.musicxml') || file.name.endsWith('.mxl'))) {
-      file.text().then((text) => {
-        try {
-          const parsed = parseMusicXML(text);
-          setScore(parsed);
-        } catch (err) {
-          console.error('Failed to parse dropped file:', err);
-        }
-      });
+    if (file && (file.name.endsWith('.xml') || file.name.endsWith('.musicxml') || file.name.endsWith('.mxl') || file.name.endsWith('.mid') || file.name.endsWith('.midi'))) {
+      if (file.name.endsWith('.mid') || file.name.endsWith('.midi')) {
+        file.arrayBuffer().then((buf) => {
+          try {
+            const parsed = importMidi(buf);
+            setScore(parsed);
+          } catch (err) {
+            console.error('Failed to parse dropped MIDI file:', err);
+            addToast(err instanceof Error ? err.message : 'Failed to import MIDI', 'error');
+          }
+        });
+      } else {
+        file.text().then((text) => {
+          try {
+            const parsed = parseMusicXML(text);
+            setScore(parsed);
+          } catch (err) {
+            console.error('Failed to parse dropped file:', err);
+            addToast(err instanceof Error ? err.message : 'Failed to open file', 'error');
+          }
+        });
+      }
     }
-  }, [setScore]);
+  }, [setScore, addToast]);
 
   // ─── Context menu ────────────────────────────────────────
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -445,6 +469,151 @@ export function Editor() {
     executeCommand(cmd);
   }, [editorState.cursor, scoreRef, executeCommand]);
 
+  const toggleOrnament = useCallback((orn: OrnamentType) => {
+    const s = scoreRef.current;
+    const cur = editorState.cursor;
+    const note = s.parts[cur.partIndex]?.measures[cur.measureIndex]?.notes[cur.noteIndex];
+    if (!note || note.type !== 'note') return;
+
+    const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+      if (n.type !== 'note') return n;
+      const nn = n as Note;
+      const orns = nn.ornaments ?? [];
+      const has = orns.includes(orn);
+      return { ...nn, ornaments: has ? orns.filter((o) => o !== orn) : [...orns, orn] };
+    });
+    executeCommand(cmd);
+  }, [editorState.cursor, scoreRef, executeCommand]);
+
+  const toggleSlur = useCallback(() => {
+    const s = scoreRef.current;
+    const cur = editorState.cursor;
+    const note = s.parts[cur.partIndex]?.measures[cur.measureIndex]?.notes[cur.noteIndex];
+    if (!note || note.type !== 'note') return;
+
+    const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+      if (n.type !== 'note') return n;
+      const nn = n as Note;
+      const nextSlur = nn.slur === 'start' ? 'stop' : nn.slur === 'stop' ? undefined : 'start';
+      return { ...nn, slur: nextSlur } as Note;
+    });
+    executeCommand(cmd);
+  }, [editorState.cursor, scoreRef, executeCommand]);
+
+  const addTempo = useCallback((bpm: number, tempoText?: string) => {
+    const cur = editorState.cursor;
+    mutateScore((s) => {
+      const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+      if (!measure) return;
+      measure.directions.push({ kind: 'tempo', bpm, text: tempoText });
+    });
+  }, [editorState.cursor, mutateScore]);
+
+  const addRehearsal = useCallback(() => {
+    const cur = editorState.cursor;
+    mutateScore((s) => {
+      // Find next rehearsal letter
+      let maxChar = 64; // '@' = before 'A'
+      for (const part of s.parts) {
+        for (const measure of part.measures) {
+          for (const dir of measure.directions) {
+            if (dir.kind === 'rehearsal' && dir.text.length === 1) {
+              maxChar = Math.max(maxChar, dir.text.charCodeAt(0));
+            }
+          }
+        }
+      }
+      const nextLetter = String.fromCharCode(maxChar + 1);
+      const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+      if (!measure) return;
+      measure.directions.push({ kind: 'rehearsal', text: nextLetter });
+    });
+  }, [editorState.cursor, mutateScore]);
+
+  const addNavigation = useCallback((mark: NavigationMark) => {
+    const cur = editorState.cursor;
+    mutateScore((s) => {
+      const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+      if (!measure) return;
+      measure.directions.push({ kind: 'navigation', mark });
+    });
+  }, [editorState.cursor, mutateScore]);
+
+  const addLyric = useCallback((lyricText: string, syllabic?: Lyric['syllabic']) => {
+    const s = scoreRef.current;
+    const cur = editorState.cursor;
+    const note = s.parts[cur.partIndex]?.measures[cur.measureIndex]?.notes[cur.noteIndex];
+    if (!note || note.type !== 'note') return;
+
+    const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+      if (n.type !== 'note') return n;
+      const nn = n as Note;
+      const lyrics: Lyric[] = nn.lyrics ? [...nn.lyrics] : [];
+      const verse = lyrics.length > 0 ? lyrics[lyrics.length - 1].verse : 1;
+      lyrics.push({ text: lyricText, syllabic, verse });
+      return { ...nn, lyrics };
+    });
+    executeCommand(cmd);
+    // Advance cursor
+    const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+    if (measure && cur.noteIndex < measure.notes.length - 1) {
+      dispatch({ type: 'SET_CURSOR', cursor: { ...cur, noteIndex: cur.noteIndex + 1 } });
+    }
+  }, [editorState.cursor, scoreRef, executeCommand, dispatch]);
+
+  const addChordSymbol = useCallback((chordText: string) => {
+    const cur = editorState.cursor;
+    // Parse basic chord: first letter is root step, optional # or b
+    const match = chordText.match(/^([A-Ga-g])([#b]?)(.*)$/);
+    if (!match) return;
+    const rootStep = match[1].toUpperCase() as Step;
+    const rootAlter = match[2] === '#' ? 1 : match[2] === 'b' ? -1 : undefined;
+    const kindStr = match[3] || '';
+    const chordKind = kindStr.includes('m') && !kindStr.includes('maj') ? 'minor'
+      : kindStr.includes('dim') ? 'diminished'
+      : kindStr.includes('aug') ? 'augmented'
+      : kindStr.includes('7') && !kindStr.includes('maj') ? 'dominant'
+      : 'major';
+
+    mutateScore((s) => {
+      const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+      if (!measure) return;
+      measure.directions.push({
+        kind: 'harmony',
+        root: { step: rootStep, alter: rootAlter },
+        chordKind,
+        text: chordText,
+      });
+    });
+  }, [editorState.cursor, mutateScore]);
+
+  const addExpression = useCallback((exprText: string) => {
+    const cur = editorState.cursor;
+    mutateScore((s) => {
+      const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
+      if (!measure) return;
+      measure.directions.push({ kind: 'words', text: exprText });
+    });
+  }, [editorState.cursor, mutateScore]);
+
+  const toggleTuplet = useCallback((actual: number, normal: number) => {
+    const s = scoreRef.current;
+    const cur = editorState.cursor;
+    const note = s.parts[cur.partIndex]?.measures[cur.measureIndex]?.notes[cur.noteIndex];
+    if (!note || note.type !== 'note') return;
+
+    const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+      if (n.type !== 'note') return n;
+      const nn = n as Note;
+      if (nn.tuplet) {
+        return { ...nn, tuplet: undefined };
+      }
+      const tuplet: TupletInfo = { actualNotes: actual, normalNotes: normal, bracket: 'start' };
+      return { ...nn, tuplet };
+    });
+    executeCommand(cmd);
+  }, [editorState.cursor, scoreRef, executeCommand]);
+
   const pitchUp = useCallback(() => {
     const s = scoreRef.current;
     const cur = editorState.cursor;
@@ -694,11 +863,25 @@ export function Editor() {
     dispatch({ type: 'STOP_PLAYBACK' });
   }, [dispatch]);
 
-  // ─── Piano input ─────────────────────────────────────────
+  // ─── Piano / Drum / Fretboard input ──────────────────────
   const handlePianoNoteDown = useCallback(
     (...args: [Step, number]) => insertNote(args[0]),
     [insertNote],
   );
+
+  const handleDrumPadHit = useCallback(
+    (step: Step) => insertNote(step),
+    [insertNote],
+  );
+
+  const handleFretClick = useCallback(
+    (...args: [number, number, Step, number]) => insertNote(args[2]),
+    [insertNote],
+  );
+
+  const currentPart = score.parts[editorState.cursor.partIndex];
+  const isPercussion = currentPart?.instrument.isPercussion ?? false;
+  const isTab = currentPart?.instrument.usesTab ?? false;
 
   // ─── Keyboard shortcuts ──────────────────────────────────
   const shortcutActions: ShortcutActions = useMemo(() => ({
@@ -733,11 +916,13 @@ export function Editor() {
     copy,
     cut,
     paste,
+    toggleSlur,
+    toggleNotationPanel: () => setShowNotation((v) => !v),
   }), [dispatch, editorState.zoom, undo, redo, togglePlayback,
     insertNote, insertChordNote, insertRest, deleteAtCursor, moveCursor, switchPart,
     toggleInputMode, cycleVoice, toggleDot, sharpen, flatten, toggleTie,
     pitchUp, pitchDown, octaveUp, octaveDown, insertMeasure, deleteMeasure,
-    selectAll, escape, copy, cut, paste]);
+    selectAll, escape, copy, cut, paste, toggleSlur]);
 
   useKeyboardShortcuts(shortcutActions);
 
@@ -754,6 +939,7 @@ export function Editor() {
         { label: 'Export as MIDI', action: exportAsMidi },
         { label: 'Export as SVG', action: exportAsSVG },
         { label: 'Export as PNG', action: exportAsPNG },
+        { label: 'Export as PDF', action: () => { exportAsPDF().catch((err: unknown) => addToast(err instanceof Error ? err.message : 'PDF export failed', 'error')); } },
         { separator: true, label: '' },
         { label: 'Print...', shortcut: 'Ctrl+P', action: printScore },
       ],
@@ -774,6 +960,8 @@ export function Editor() {
         { label: 'Delete Measure', shortcut: 'Ctrl+Shift+Del', action: deleteMeasure },
         { separator: true, label: '' },
         { label: 'Transpose...', action: () => setShowTransposeDialog(true) },
+        { separator: true, label: '' },
+        { label: 'Settings...', action: () => setShowSettings(true) },
       ],
     },
     {
@@ -788,8 +976,9 @@ export function Editor() {
           action: () => dispatch({ type: 'TOGGLE_DARK_MODE' }),
         },
         { separator: true, label: '' },
-        { label: showPiano ? 'Hide Piano' : 'Show Piano', action: () => setShowPiano(!showPiano) },
+        { label: showPiano ? `Hide ${isPercussion ? 'Drum Pads' : isTab ? 'Fretboard' : 'Piano'}` : `Show ${isPercussion ? 'Drum Pads' : isTab ? 'Fretboard' : 'Piano'}`, action: () => setShowPiano(!showPiano) },
         { label: showMixer ? 'Hide Mixer' : 'Show Mixer', action: () => setShowMixer(!showMixer) },
+        { label: showNotation ? 'Hide Notation Panel' : 'Show Notation Panel', shortcut: 'Ctrl+N', action: () => setShowNotation(!showNotation) },
       ],
     },
     {
@@ -798,10 +987,10 @@ export function Editor() {
         { label: 'Keyboard Shortcuts...', shortcut: '?', action: () => setShowShortcutsDialog(true) },
       ],
     },
-  ], [triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, printScore,
+  ], [triggerOpen, saveAsXML, exportAsMXL, exportAsMidi, exportAsSVG, exportAsPNG, exportAsPDF, addToast, printScore,
     undo, redo, commandHistory.canUndo, commandHistory.canRedo,
     cut, copy, paste, selectAll, insertMeasure, deleteMeasure, dispatch, editorState.zoom,
-    editorState.isDarkMode, showPiano, showMixer]);
+    editorState.isDarkMode, showPiano, showMixer, showNotation, isPercussion, isTab]);
 
   return (
     <div
@@ -817,6 +1006,7 @@ export function Editor() {
 
       <Toolbar
         onArticulation={toggleArticulation}
+        onOrnament={toggleOrnament}
         onDot={toggleDot}
         onSharp={sharpen}
         onFlat={flatten}
@@ -845,9 +1035,34 @@ export function Editor() {
         <InspectorPanel />
       </div>
 
-      {showPiano && (
+      {showNotation && (
+        <NotationPanel
+          onToggleSlur={toggleSlur}
+          onAddTempo={addTempo}
+          onAddRehearsal={addRehearsal}
+          onAddNavigation={addNavigation}
+          onAddLyric={addLyric}
+          onAddChordSymbol={addChordSymbol}
+          onAddExpression={addExpression}
+          onToggleTuplet={toggleTuplet}
+        />
+      )}
+
+      {showPiano && !isPercussion && !isTab && (
         <VirtualPiano
           onNoteDown={handlePianoNoteDown}
+        />
+      )}
+
+      {showPiano && isPercussion && (
+        <DrumPad onPadHit={handleDrumPadHit} />
+      )}
+
+      {showPiano && isTab && (
+        <VirtualFretboard
+          tuning={currentPart?.instrument.tabTuning}
+          capo={currentPart?.instrument.tabCapo}
+          onFretClick={handleFretClick}
         />
       )}
 
@@ -897,6 +1112,20 @@ export function Editor() {
         isOpen={showShortcutsDialog}
         onClose={() => setShowShortcutsDialog(false)}
       />
+
+      <SettingsDialog
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
+
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
