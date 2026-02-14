@@ -6,6 +6,7 @@ import type { MoveCursorDirection } from '@/stores/EditorContext.tsx';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts.ts';
 import type { ShortcutActions } from '@/hooks/useKeyboardShortcuts.ts';
 import { useFileIO } from '@/hooks/useFileIO.ts';
+import type { Command } from '@/core/score/index.ts';
 import {
   createNote, createRest, addMeasure,
   InsertNoteCommand, InsertRestCommand, DeleteNoteCommand, ReplaceNoteCommand,
@@ -519,15 +520,73 @@ export function Editor() {
   const toggleTie = useCallback(() => {
     const s = scoreRef.current;
     const cur = editorState.cursor;
-    const note = s.parts[cur.partIndex]?.measures[cur.measureIndex]?.notes[cur.noteIndex];
-    if (!note || note.type !== 'note') return;
+    const part = s.parts[cur.partIndex];
+    if (!part) return;
 
-    const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
-      if (n.type !== 'note') return n;
-      const nn = n as Note;
-      return { ...nn, tie: nn.tie ? undefined : 'start' };
-    });
-    executeCommand(cmd);
+    const currentNote = part.measures[cur.measureIndex]?.notes[cur.noteIndex];
+    if (!currentNote || currentNote.type !== 'note') return;
+
+    // Toggle tie on current note
+    const hasTie = currentNote.tie === 'start' || currentNote.tie === 'start-stop';
+
+    if (hasTie) {
+      // Remove tie - just clear current note's tie
+      const cmd = new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+        if (n.type !== 'note') return n;
+        const nn = n as Note;
+        // If it was a start-stop, keep the stop part
+        if (nn.tie === 'start-stop') {
+          return { ...nn, tie: 'stop' };
+        }
+        return { ...nn, tie: undefined };
+      });
+      executeCommand(cmd);
+    } else {
+      // Add tie - set current note as start and find next note to set as stop
+      const cmds: Command[] = [];
+
+      // Set current note as tie start
+      cmds.push(new ModifyNoteCommand(s, { ...cur }, cur.noteIndex, (n: NoteOrRest) => {
+        if (n.type !== 'note') return n;
+        const nn = n as Note;
+        return { ...nn, tie: 'start' };
+      }));
+
+      // Find next note in sequence (respecting voice)
+      let foundNext = false;
+      for (let m = cur.measureIndex; m < part.measures.length && !foundNext; m++) {
+        const measure = part.measures[m];
+        const startIdx = m === cur.measureIndex ? cur.noteIndex + 1 : 0;
+
+        for (let n = startIdx; n < measure.notes.length; n++) {
+          const nextNote = measure.notes[n];
+          if (nextNote?.type === 'note' && nextNote.voice === cur.voice) {
+            // Set next note as tie stop
+            cmds.push(new ModifyNoteCommand(
+              s,
+              { ...cur, measureIndex: m, noteIndex: n },
+              n,
+              (note: NoteOrRest) => {
+                if (note.type !== 'note') return note;
+                const nn = note as Note;
+                // If it already has a tie, make it start-stop
+                if (nn.tie === 'start') {
+                  return { ...nn, tie: 'start-stop' };
+                }
+                return { ...nn, tie: 'stop' };
+              }
+            ));
+            foundNext = true;
+            break;
+          }
+        }
+      }
+
+      // Execute all commands
+      for (const cmd of cmds) {
+        executeCommand(cmd);
+      }
+    }
   }, [editorState.cursor, scoreRef, executeCommand]);
 
   const toggleArticulation = useCallback((art: ArticulationType) => {

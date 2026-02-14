@@ -10,6 +10,7 @@ import type {
   Barline,
   HarmonyDirection,
 } from '@/types/index.ts';
+import { processMeasureBeaming, type BeamInfo } from '@/core/score/beaming.ts';
 
 // ─── XML Helpers ────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ function serializeAttributes(attrs: MeasureAttributes, divisions: number): strin
   return el('attributes', parts.join(''));
 }
 
-function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
+function serializeNote(noteOrRest: NoteOrRest, divisions: number, beamInfo?: BeamInfo[]): string {
   const parts: string[] = [];
 
   if (noteOrRest.type === 'note') {
@@ -133,6 +134,13 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
       parts.push(el('accidental', note.accidental));
     }
 
+    // Add beam information
+    if (beamInfo && beamInfo.length > 0) {
+      for (const beam of beamInfo) {
+        parts.push(el('beam', beam.position, { number: String(beam.number) }));
+      }
+    }
+
     // Notations (tied, articulations, ornaments, technical)
     const notations: string[] = [];
     if (note.tie) {
@@ -148,6 +156,8 @@ function serializeNote(noteOrRest: NoteOrRest, divisions: number): string {
       const artParts: string[] = [];
       for (const art of note.articulations) {
         if (art === 'marcato') artParts.push('<strong-accent/>');
+        else if (art === 'palm-mute') artParts.push('<palm-mute/>');
+        else if (art === 'let-ring') artParts.push('<let-ring/>');
         else artParts.push(`<${art}/>`);
       }
       notations.push(el('articulations', artParts.join('')));
@@ -325,8 +335,13 @@ function serializeMeasure(measure: Measure, divisions: number): string {
     parts.push(serializeDirection(dir));
   }
 
-  for (const note of measure.notes) {
-    parts.push(serializeNote(note, divisions));
+  // Calculate beaming for this measure
+  const beamMap = processMeasureBeaming(measure.notes);
+
+  for (let i = 0; i < measure.notes.length; i++) {
+    const note = measure.notes[i];
+    const beamInfo = beamMap.get(i);
+    parts.push(serializeNote(note, divisions, beamInfo));
   }
 
   if (measure.barline) {

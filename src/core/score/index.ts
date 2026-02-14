@@ -62,3 +62,13 @@ export {
   getRemainingSpace,
   findNextAvailableMeasure,
 } from './duration.ts';
+
+export {
+  isBeamable,
+  getBeamCount,
+  findBeamGroups,
+  calculateBeamPositions,
+  processMeasureBeaming,
+  type BeamInfo,
+  type BeamPosition,
+} from './beaming.ts';
