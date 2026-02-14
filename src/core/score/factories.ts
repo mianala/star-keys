@@ -20,6 +20,19 @@ export function uid(): string {
 
 // ─── Preset Instruments ─────────────────────────────────────
 
+export const PIANO: InstrumentConfig = {
+  id: 'piano',
+  name: 'Piano',
+  abbreviation: 'Pno.',
+  gmProgram: 0,
+  midiChannel: 0,
+  clef: { sign: 'G', line: 2 },
+  staves: 1,
+  usesTab: false,
+  isPercussion: false,
+  range: { low: 'A0', high: 'C8' },
+};
+
 export const GUITAR_STANDARD: InstrumentConfig = {
   id: 'acoustic-guitar',
   name: 'Acoustic Guitar',
@@ -72,6 +85,7 @@ export const DRUM_SET: InstrumentConfig = {
 };
 
 export const PRESET_INSTRUMENTS: InstrumentConfig[] = [
+  PIANO,
   GUITAR_STANDARD,
   ELECTRIC_GUITAR,
   BASS_GUITAR,
@@ -166,7 +180,7 @@ export function createPart(instrument: InstrumentConfig, measureCount = 4): Part
 export function createScore(
   title = 'Untitled Score',
   composer = '',
-  instruments: InstrumentConfig[] = [GUITAR_STANDARD],
+  instruments: InstrumentConfig[] = [PIANO],
   measureCount = 4,
 ): Score {
   return {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useRef, useMemo, useCallback, type ReactNode } from 'react';
 import type { Score, EditorState, NoteDuration, CursorPosition, InputMode, EditorTool } from '@/types/index.ts';
-import { createScore, GUITAR_STANDARD, DRUM_SET, CommandHistory } from '@/core/score/index.ts';
+import { createScore, PIANO, CommandHistory } from '@/core/score/index.ts';
 import type { Command } from '@/core/score/index.ts';
 import { serializeToMusicXML } from '@/core/musicxml/index.ts';
 
@@ -28,6 +28,9 @@ type Action =
   | { type: 'SET_CURSOR'; cursor: CursorPosition }
   | { type: 'SET_INPUT_MODE'; mode: InputMode }
   | { type: 'SET_ACTIVE_TOOL'; tool: EditorTool }
+  | { type: 'SELECT_NOTES'; noteIds: string[] }
+  | { type: 'ADD_TO_SELECTION'; noteIds: string[] }
+  | { type: 'CLEAR_SELECTION' }
   | { type: 'TOGGLE_PLAYBACK' }
   | { type: 'STOP_PLAYBACK' }
   | { type: 'SET_TEMPO'; tempo: number }
@@ -51,6 +54,12 @@ function editorReducer(state: EditorState, action: Action): EditorState {
       return { ...state, inputMode: action.mode };
     case 'SET_ACTIVE_TOOL':
       return { ...state, activeTool: action.tool };
+    case 'SELECT_NOTES':
+      return { ...state, selectedNoteIds: action.noteIds };
+    case 'ADD_TO_SELECTION':
+      return { ...state, selectedNoteIds: [...new Set([...state.selectedNoteIds, ...action.noteIds])] };
+    case 'CLEAR_SELECTION':
+      return { ...state, selectedNoteIds: [] };
     case 'TOGGLE_PLAYBACK':
       return { ...state, isPlaying: !state.isPlaying };
     case 'STOP_PLAYBACK':
@@ -83,6 +92,7 @@ interface EditorContextValue {
   musicXML: string;
   commandHistory: CommandHistory;
   executeCommand: (cmd: Command) => void;
+  mutateScore: (fn: (score: Score) => void) => void;
   scoreRef: React.RefObject<Score>;
 }
 
@@ -93,7 +103,7 @@ const EditorContext = createContext<EditorContextValue | null>(null);
 export function EditorProvider({ children }: { children: ReactNode }) {
   const [editorState, dispatch] = useReducer(editorReducer, initialEditor);
   const scoreRef = useRef<Score>(
-    createScore('Untitled Score', '', [GUITAR_STANDARD, DRUM_SET], 8),
+    createScore('Untitled Score', '', [PIANO], 8),
   );
   const commandHistoryRef = useRef(new CommandHistory());
 
@@ -105,6 +115,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
 
   const executeCommand = useCallback((cmd: Command) => {
     commandHistoryRef.current.execute(cmd);
+    dispatch({ type: 'FORCE_UPDATE' });
+  }, []);
+
+  const mutateScore = useCallback((fn: (score: Score) => void) => {
+    fn(scoreRef.current);
     dispatch({ type: 'FORCE_UPDATE' });
   }, []);
 
@@ -122,6 +137,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     musicXML,
     commandHistory: commandHistoryRef.current,
     executeCommand,
+    mutateScore,
     scoreRef,
   };
 

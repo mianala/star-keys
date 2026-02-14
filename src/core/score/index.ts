@@ -8,6 +8,7 @@ export {
   addMeasure,
   addNote,
   removeNote,
+  PIANO,
   GUITAR_STANDARD,
   ELECTRIC_GUITAR,
   BASS_GUITAR,
@@ -23,4 +24,8 @@ export {
   InsertRestCommand,
   DeleteNoteCommand,
   ReplaceNoteCommand,
+  ModifyNoteCommand,
+  InsertMeasureCommand,
+  DeleteMeasureCommand,
+  ChangeAttributesCommand,
 } from './editCommands.ts';

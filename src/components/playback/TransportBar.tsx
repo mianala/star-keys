@@ -1,6 +1,14 @@
 import { useEditor } from '@/stores/EditorContext.tsx';
 
-export function TransportBar() {
+interface TransportBarProps {
+  onPlay?: () => void;
+  onStop?: () => void;
+  progress?: number;
+  currentTime?: string;
+  totalTime?: string;
+}
+
+export function TransportBar({ onPlay, onStop, progress = 0, currentTime = '0:00', totalTime = '0:00' }: TransportBarProps) {
   const { editorState, dispatch } = useEditor();
 
   return (
@@ -9,21 +17,21 @@ export function TransportBar() {
         <button
           className="transport-btn"
           title="Rewind"
-          onClick={() => dispatch({ type: 'STOP_PLAYBACK' })}
+          onClick={onStop ?? (() => dispatch({ type: 'STOP_PLAYBACK' }))}
         >
           ⏮
         </button>
         <button
           className={`transport-btn transport-btn-play${editorState.isPlaying ? ' playing' : ''}`}
           title="Play (Space)"
-          onClick={() => dispatch({ type: 'TOGGLE_PLAYBACK' })}
+          onClick={onPlay ?? (() => dispatch({ type: 'TOGGLE_PLAYBACK' }))}
         >
           {editorState.isPlaying ? '⏸' : '▶'}
         </button>
         <button
           className="transport-btn"
           title="Stop"
-          onClick={() => dispatch({ type: 'STOP_PLAYBACK' })}
+          onClick={onStop ?? (() => dispatch({ type: 'STOP_PLAYBACK' }))}
         >
           ⏹
         </button>
@@ -50,9 +58,9 @@ export function TransportBar() {
 
       <div className="transport-progress">
         <div className="transport-progress-bar">
-          <div className="transport-progress-fill" style={{ width: '0%' }} />
+          <div className="transport-progress-fill" style={{ width: `${progress}%` }} />
         </div>
-        <span className="transport-time">0:00 / 0:00</span>
+        <span className="transport-time">{currentTime} / {totalTime}</span>
       </div>
 
       <div className="transport-toggles">

@@ -1,13 +1,33 @@
-import type { Note, Rest } from '@/types/index.ts';
+import type { Note, Rest, DynamicLevel } from '@/types/index.ts';
 import { useEditor } from '@/stores/EditorContext.tsx';
 
+const DYNAMIC_LEVELS: DynamicLevel[] = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'];
+
 export function InspectorPanel() {
-  const { score, editorState } = useEditor();
+  const { score, editorState, mutateScore } = useEditor();
   const { cursor } = editorState;
 
   const part = score.parts[cursor.partIndex];
   const measure = part?.measures[cursor.measureIndex];
   const noteAtCursor = measure?.notes[cursor.noteIndex];
+
+  const currentDynamic = measure?.directions.find((d) => d.kind === 'dynamic');
+  const currentTempo = measure?.directions.find((d) => d.kind === 'tempo');
+
+  const setDynamic = (level: DynamicLevel) => {
+    const mIdx = cursor.measureIndex;
+    const pIdx = cursor.partIndex;
+    mutateScore((s) => {
+      const m = s.parts[pIdx]?.measures[mIdx];
+      if (!m) return;
+      const existing = m.directions.findIndex((d) => d.kind === 'dynamic');
+      if (existing >= 0) {
+        m.directions[existing] = { kind: 'dynamic', level };
+      } else {
+        m.directions.push({ kind: 'dynamic', level });
+      }
+    });
+  };
 
   return (
     <aside className="inspector-panel">
@@ -76,17 +96,38 @@ export function InspectorPanel() {
                     {(noteAtCursor as Note).pitch.octave}
                   </span>
                 </div>
+                {(noteAtCursor as Note).pitch.alter !== undefined && (noteAtCursor as Note).pitch.alter !== 0 && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Alter</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).pitch.alter! > 0 ? '+' : ''}{(noteAtCursor as Note).pitch.alter}</span>
+                  </div>
+                )}
                 {(noteAtCursor as Note).accidental && (
                   <div className="inspector-row">
                     <span className="inspector-label">Accidental</span>
                     <span className="inspector-value">{(noteAtCursor as Note).accidental}</span>
                   </div>
                 )}
+                {(noteAtCursor as Note).tie && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Tie</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).tie}</span>
+                  </div>
+                )}
+                {(noteAtCursor as Note).articulations && (noteAtCursor as Note).articulations!.length > 0 && (
+                  <div className="inspector-row">
+                    <span className="inspector-label">Articulations</span>
+                    <span className="inspector-value">{(noteAtCursor as Note).articulations!.join(', ')}</span>
+                  </div>
+                )}
               </>
             )}
             <div className="inspector-row">
               <span className="inspector-label">Duration</span>
-              <span className="inspector-value">{noteAtCursor.duration}</span>
+              <span className="inspector-value">
+                {noteAtCursor.duration}
+                {noteAtCursor.dots > 0 ? ` (${'·'.repeat(noteAtCursor.dots)})` : ''}
+              </span>
             </div>
             {noteAtCursor.type === 'rest' && (noteAtCursor as Rest).isFullMeasure && (
               <div className="inspector-row">
@@ -94,6 +135,64 @@ export function InspectorPanel() {
                 <span className="inspector-value">Full measure</span>
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {/* Measure properties */}
+      {measure && (
+        <>
+          <h3 className="panel-title" style={{ marginTop: 8 }}>Measure</h3>
+          <div className="inspector-section">
+            {measure.attributes?.time && (
+              <div className="inspector-row">
+                <span className="inspector-label">Time</span>
+                <span className="inspector-value">{measure.attributes.time.beats}/{measure.attributes.time.beatType}</span>
+              </div>
+            )}
+            {measure.attributes?.key && (
+              <div className="inspector-row">
+                <span className="inspector-label">Key</span>
+                <span className="inspector-value">{measure.attributes.key.fifths > 0 ? `${measure.attributes.key.fifths}#` : measure.attributes.key.fifths < 0 ? `${Math.abs(measure.attributes.key.fifths)}b` : 'C'} {measure.attributes.key.mode ?? ''}</span>
+              </div>
+            )}
+            {currentTempo && currentTempo.kind === 'tempo' && (
+              <div className="inspector-row">
+                <span className="inspector-label">Tempo</span>
+                <span className="inspector-value">{currentTempo.bpm} BPM</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Dynamics */}
+      <h3 className="panel-title" style={{ marginTop: 8 }}>Dynamics</h3>
+      <div className="inspector-section">
+        <div className="articulation-palette">
+          {DYNAMIC_LEVELS.map((level) => (
+            <button
+              key={level}
+              className={`articulation-btn ${currentDynamic?.kind === 'dynamic' && currentDynamic.level === level ? 'active' : ''}`}
+              onClick={() => setDynamic(level)}
+              title={level}
+              style={{ fontSize: 11, fontStyle: 'italic' }}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Selection info */}
+      {editorState.selectedNoteIds.length > 0 && (
+        <>
+          <h3 className="panel-title" style={{ marginTop: 8 }}>Selection</h3>
+          <div className="inspector-section">
+            <div className="inspector-row">
+              <span className="inspector-label">Selected</span>
+              <span className="inspector-value">{editorState.selectedNoteIds.length} notes</span>
+            </div>
           </div>
         </>
       )}
