@@ -51,3 +51,14 @@ export {
   DeleteMeasureCommand,
   ChangeAttributesCommand,
 } from './editCommands.ts';
+
+export {
+  getDurationInQuarters,
+  getMeasureDuration,
+  getEffectiveTimeSignature,
+  getMeasureCapacity,
+  canAddToMeasure,
+  isMeasureFull,
+  getRemainingSpace,
+  findNextAvailableMeasure,
+} from './duration.ts';

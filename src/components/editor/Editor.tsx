@@ -7,9 +7,10 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts.ts';
 import type { ShortcutActions } from '@/hooks/useKeyboardShortcuts.ts';
 import { useFileIO } from '@/hooks/useFileIO.ts';
 import {
-  createNote, createRest,
+  createNote, createRest, addMeasure,
   InsertNoteCommand, InsertRestCommand, DeleteNoteCommand, ReplaceNoteCommand,
   ModifyNoteCommand, InsertMeasureCommand, DeleteMeasureCommand,
+  canAddToMeasure,
 } from '@/core/score/index.ts';
 import { AudioEngine } from '@/core/audio/index.ts';
 import { parseMusicXML } from '@/core/musicxml/index.ts';
@@ -291,8 +292,6 @@ export function Editor() {
     const cur = editorState.cursor;
     const part = s.parts[cur.partIndex];
     if (!part) return;
-    const measure = part.measures[cur.measureIndex];
-    if (!measure) return;
 
     const note = createNote(
       { step, octave: 4 },
@@ -300,19 +299,41 @@ export function Editor() {
       cur.voice,
     );
 
-    if (editorState.inputMode === 'replace' && measure.notes[cur.noteIndex]) {
-      const oldNote = measure.notes[cur.noteIndex];
-      const cmd = new ReplaceNoteCommand(s, { ...cur }, oldNote.id, note);
+    // Find the measure to insert into, considering measure capacity
+    let targetMeasureIndex = cur.measureIndex;
+    let targetMeasure = part.measures[targetMeasureIndex];
+
+    // If we're in insert mode, check if the note fits in the current measure
+    if (editorState.inputMode === 'insert') {
+      // Check all measures from current position onwards
+      while (targetMeasure && !canAddToMeasure(targetMeasure, note, part.measures.slice(0, targetMeasureIndex))) {
+        targetMeasureIndex++;
+        if (targetMeasureIndex >= part.measures.length) {
+          // Need to add a new measure
+          addMeasure(part);
+        }
+        targetMeasure = part.measures[targetMeasureIndex];
+      }
+    }
+
+    if (!targetMeasure) return;
+
+    const targetCursor = { ...cur, measureIndex: targetMeasureIndex };
+
+    if (editorState.inputMode === 'replace' && targetMeasure.notes[cur.noteIndex]) {
+      const oldNote = targetMeasure.notes[cur.noteIndex];
+      const cmd = new ReplaceNoteCommand(s, targetCursor, oldNote.id, note);
       executeCommand(cmd);
     } else {
-      const cmd = new InsertNoteCommand(s, { ...cur }, note);
+      const cmd = new InsertNoteCommand(s, targetCursor, note);
       executeCommand(cmd);
     }
 
     const newNoteIndex = editorState.inputMode === 'replace'
-      ? Math.min(cur.noteIndex + 1, measure.notes.length - 1)
-      : measure.notes.length - 1;
-    dispatch({ type: 'SET_CURSOR', cursor: { ...cur, noteIndex: newNoteIndex } });
+      ? Math.min(cur.noteIndex + 1, targetMeasure.notes.length - 1)
+      : targetMeasure.notes.length - 1;
+
+    dispatch({ type: 'SET_CURSOR', cursor: { ...targetCursor, noteIndex: newNoteIndex } });
 
     // Sound preview
     const engine = audioEngineRef.current;
@@ -379,24 +400,45 @@ export function Editor() {
   const insertRest = useCallback(() => {
     const s = scoreRef.current;
     const cur = editorState.cursor;
-    const measure = s.parts[cur.partIndex]?.measures[cur.measureIndex];
-    if (!measure) return;
+    const part = s.parts[cur.partIndex];
+    if (!part) return;
 
     const rest = createRest(editorState.selectedDuration, cur.voice);
 
-    if (editorState.inputMode === 'replace' && measure.notes[cur.noteIndex]) {
-      const oldNote = measure.notes[cur.noteIndex];
-      const cmd = new ReplaceNoteCommand(s, { ...cur }, oldNote.id, rest);
+    // Find the measure to insert into, considering measure capacity
+    let targetMeasureIndex = cur.measureIndex;
+    let targetMeasure = part.measures[targetMeasureIndex];
+
+    // If we're in insert mode, check if the rest fits in the current measure
+    if (editorState.inputMode === 'insert') {
+      // Check all measures from current position onwards
+      while (targetMeasure && !canAddToMeasure(targetMeasure, rest, part.measures.slice(0, targetMeasureIndex))) {
+        targetMeasureIndex++;
+        if (targetMeasureIndex >= part.measures.length) {
+          // Need to add a new measure
+          addMeasure(part);
+        }
+        targetMeasure = part.measures[targetMeasureIndex];
+      }
+    }
+
+    if (!targetMeasure) return;
+
+    const targetCursor = { ...cur, measureIndex: targetMeasureIndex };
+
+    if (editorState.inputMode === 'replace' && targetMeasure.notes[cur.noteIndex]) {
+      const oldNote = targetMeasure.notes[cur.noteIndex];
+      const cmd = new ReplaceNoteCommand(s, targetCursor, oldNote.id, rest);
       executeCommand(cmd);
     } else {
-      const cmd = new InsertRestCommand(s, { ...cur }, rest);
+      const cmd = new InsertRestCommand(s, targetCursor, rest);
       executeCommand(cmd);
     }
 
     const newNoteIndex = editorState.inputMode === 'replace'
-      ? Math.min(cur.noteIndex + 1, measure.notes.length - 1)
-      : measure.notes.length - 1;
-    dispatch({ type: 'SET_CURSOR', cursor: { ...cur, noteIndex: newNoteIndex } });
+      ? Math.min(cur.noteIndex + 1, targetMeasure.notes.length - 1)
+      : targetMeasure.notes.length - 1;
+    dispatch({ type: 'SET_CURSOR', cursor: { ...targetCursor, noteIndex: newNoteIndex } });
   }, [editorState.cursor, editorState.selectedDuration, editorState.inputMode, scoreRef, executeCommand, dispatch]);
 
   const deleteAtCursor = useCallback(() => {
