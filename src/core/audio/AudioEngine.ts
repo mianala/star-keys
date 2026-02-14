@@ -1,15 +1,12 @@
-import type { Score, Note, NoteOrRest } from '@/types/index.ts';
+import type { Score } from '@/types/index.ts';
 import { Soundfont } from 'smplr';
+import { PlaybackScheduler } from './PlaybackScheduler.ts';
+import type { ScheduledNoteEvent, PositionEvent } from './PlaybackScheduler.ts';
 
 export type PlaybackState = 'idle' | 'playing' | 'paused';
 
-export interface ScheduledEvent {
-  time: number;       // seconds from start
-  duration: number;   // seconds
-  pitch: number;      // MIDI note number
-  velocity: number;   // 0-127
-  partIndex: number;
-}
+/** @deprecated Use ScheduledNoteEvent from PlaybackScheduler instead */
+export type ScheduledEvent = ScheduledNoteEvent;
 
 interface PlaybackListener {
   onStateChange?: (state: PlaybackState) => void;
@@ -17,39 +14,14 @@ interface PlaybackListener {
   onPositionUpdate?: (measureIndex: number, noteIndex: number) => void;
 }
 
-const STEP_TO_MIDI: Record<string, number> = {
-  C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
-};
-
-function noteToMidi(note: Note): number {
-  const step = STEP_TO_MIDI[note.pitch.step] ?? 0;
-  const octave = note.pitch.octave;
-  const alter = note.pitch.alter ?? 0;
-  return (octave + 1) * 12 + step + alter;
-}
-
-const DURATION_BEATS: Record<string, number> = {
-  whole: 4, half: 2, quarter: 1, eighth: 0.5,
-  '16th': 0.25, '32nd': 0.125, '64th': 0.0625,
-};
-
-function noteDurationBeats(noteOrRest: NoteOrRest): number {
-  let base = DURATION_BEATS[noteOrRest.duration] ?? 1;
-  let add = base;
-  for (let i = 0; i < noteOrRest.dots; i++) {
-    add /= 2;
-    base += add;
-  }
-  return base;
-}
-
 export class AudioEngine {
   #state: PlaybackState = 'idle';
   #audioContext: AudioContext | null = null;
   #instruments: Map<number, Soundfont> = new Map();
+  #percussionInstrument: Soundfont | null = null;
   #startTime = 0;
   #pauseTime = 0;
-  #events: ScheduledEvent[] = [];
+  #scheduler = new PlaybackScheduler();
   #totalTime = 0;
   #animFrameId = 0;
   #listeners: PlaybackListener[] = [];
@@ -86,56 +58,80 @@ export class AudioEngine {
     return sf;
   }
 
+  async #loadPercussion(): Promise<Soundfont> {
+    if (this.#percussionInstrument) return this.#percussionInstrument;
+    const ctx = await this.ensureContext();
+    const sf = new Soundfont(ctx, { instrument: 'synth_drum' });
+    await sf.load;
+    this.#percussionInstrument = sf;
+    return sf;
+  }
+
   #gmProgramName(program: number): string {
-    // Map GM program numbers to smplr instrument names
     const names: Record<number, string> = {
       0: 'acoustic_grand_piano',
+      1: 'bright_acoustic_piano',
+      2: 'electric_grand_piano',
+      4: 'electric_piano_1',
+      5: 'electric_piano_2',
+      6: 'harpsichord',
+      7: 'clavinet',
+      8: 'celesta',
+      11: 'vibraphone',
+      12: 'marimba',
+      13: 'xylophone',
+      16: 'drawbar_organ',
+      19: 'church_organ',
+      24: 'acoustic_guitar_nylon',
       25: 'acoustic_guitar_nylon',
+      26: 'electric_guitar_jazz',
       27: 'electric_guitar_clean',
+      28: 'electric_guitar_muted',
+      29: 'overdriven_guitar',
+      30: 'distortion_guitar',
+      32: 'acoustic_bass',
       33: 'electric_bass_finger',
+      34: 'electric_bass_pick',
+      35: 'fretless_bass',
+      36: 'slap_bass_1',
+      40: 'violin',
+      41: 'viola',
+      42: 'cello',
+      43: 'contrabass',
+      44: 'tremolo_strings',
+      46: 'orchestral_harp',
+      48: 'string_ensemble_1',
+      50: 'synth_strings_1',
+      52: 'choir_aahs',
+      56: 'trumpet',
+      57: 'trombone',
+      58: 'tuba',
+      59: 'muted_trumpet',
+      60: 'french_horn',
+      61: 'brass_section',
+      64: 'soprano_sax',
+      65: 'alto_sax',
+      66: 'tenor_sax',
+      67: 'baritone_sax',
+      68: 'oboe',
+      69: 'english_horn',
+      70: 'bassoon',
+      71: 'clarinet',
+      72: 'piccolo',
+      73: 'flute',
+      74: 'recorder',
+      75: 'pan_flute',
     };
     return names[program] ?? 'acoustic_grand_piano';
   }
 
-  scheduleScore(score: Score, bpm: number): ScheduledEvent[] {
-    const events: ScheduledEvent[] = [];
-    const secPerBeat = 60 / bpm;
+  scheduleScore(score: Score, bpm: number): ScheduledNoteEvent[] {
+    this.#scheduler.schedule(score, bpm);
+    return this.#scheduler.events;
+  }
 
-    for (let p = 0; p < score.parts.length; p++) {
-      const part = score.parts[p];
-      if (part.instrument.isPercussion) continue; // Skip percussion for now
-
-      let beatPos = 0;
-      for (const measure of part.measures) {
-        // Check for tempo direction
-        for (const dir of measure.directions) {
-          if (dir.kind === 'tempo') {
-            // Would update secPerBeat - simplified for now
-          }
-        }
-
-        for (const noteOrRest of measure.notes) {
-          const durBeats = noteDurationBeats(noteOrRest);
-
-          if (noteOrRest.type === 'note') {
-            const note = noteOrRest as Note;
-            const midi = noteToMidi(note);
-            const velocity = 80;
-            events.push({
-              time: beatPos * secPerBeat,
-              duration: durBeats * secPerBeat * 0.9, // slight detach
-              pitch: midi,
-              velocity,
-              partIndex: p,
-            });
-          }
-
-          beatPos += durBeats;
-        }
-      }
-    }
-
-    return events;
+  get positionEvents(): PositionEvent[] {
+    return this.#scheduler.positionEvents;
   }
 
   async play(score: Score, bpm: number, metronome = false): Promise<void> {
@@ -145,27 +141,35 @@ export class AudioEngine {
     this.#metronomeEnabled = metronome;
 
     // Load instruments for all parts
+    const loadPromises: Promise<unknown>[] = [];
     for (const part of score.parts) {
-      if (!part.instrument.isPercussion) {
-        await this.loadInstrument(part.instrument.gmProgram);
+      if (part.instrument.isPercussion) {
+        loadPromises.push(this.#loadPercussion());
+      } else {
+        loadPromises.push(this.loadInstrument(part.instrument.gmProgram));
       }
     }
+    await Promise.all(loadPromises);
 
-    this.#events = this.scheduleScore(score, bpm);
-    this.#totalTime = this.#events.reduce(
-      (max, e) => Math.max(max, e.time + e.duration),
-      0,
-    );
+    // Schedule all events via PlaybackScheduler
+    this.#scheduler.schedule(score, bpm);
+    this.#totalTime = this.#scheduler.totalTime;
 
     const offset = this.#state === 'paused' ? this.#pauseTime : 0;
     this.#startTime = ctx.currentTime - offset;
 
-    // Schedule all events
-    for (const event of this.#events) {
+    // Schedule all note events
+    for (const event of this.#scheduler.events) {
       if (event.time < offset) continue;
       const part = score.parts[event.partIndex];
       if (!part) continue;
-      const sf = this.#instruments.get(part.instrument.gmProgram);
+
+      let sf: Soundfont | undefined;
+      if (part.instrument.isPercussion) {
+        sf = this.#percussionInstrument ?? undefined;
+      } else {
+        sf = this.#instruments.get(part.instrument.gmProgram);
+      }
       if (!sf) continue;
 
       const startAt = this.#startTime + event.time;
@@ -179,50 +183,37 @@ export class AudioEngine {
 
     // Schedule metronome
     if (this.#metronomeEnabled) {
-      this.#scheduleMetronome(ctx, score, bpm, offset);
+      this.#scheduleMetronome(ctx, score, offset);
     }
 
     this.#setState('playing');
     this.#startTimeUpdate(ctx);
   }
 
-  #scheduleMetronome(ctx: AudioContext, score: Score, bpm: number, offset: number) {
-    const secPerBeat = 60 / bpm;
-    const firstPart = score.parts[0];
-    if (!firstPart) return;
-
+  #scheduleMetronome(ctx: AudioContext, score: Score, offset: number) {
     this.#metronomGain = ctx.createGain();
     this.#metronomGain.gain.value = 0.3;
     this.#metronomGain.connect(ctx.destination);
 
-    let beatPos = 0;
-    for (const measure of firstPart.measures) {
-      const time = measure.attributes?.time;
-      const beatsInMeasure = time?.beats ?? 4;
+    const beats = this.#scheduler.getMetronomeBeats(score);
 
-      for (let b = 0; b < beatsInMeasure; b++) {
-        const t = beatPos * secPerBeat;
-        if (t < offset) {
-          beatPos += 1;
-          continue;
-        }
+    for (const beat of beats) {
+      if (beat.time < offset) continue;
 
-        const startAt = this.#startTime + t;
-        const freq = b === 0 ? 1000 : 800;
-        const dur = b === 0 ? 0.03 : 0.02;
+      const startAt = this.#startTime + beat.time;
+      const isDownbeat = beat.beat === 0;
+      const freq = isDownbeat ? 1000 : 800;
+      const dur = isDownbeat ? 0.03 : 0.02;
 
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.value = freq;
-        osc.connect(gain);
-        gain.connect(this.#metronomGain!);
-        gain.gain.setValueAtTime(0.5, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.01, startAt + dur);
-        osc.start(startAt);
-        osc.stop(startAt + dur);
-
-        beatPos += 1;
-      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(this.#metronomGain!);
+      gain.gain.setValueAtTime(0.5, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.01, startAt + dur);
+      osc.start(startAt);
+      osc.stop(startAt + dur);
     }
   }
 
@@ -268,10 +259,10 @@ export class AudioEngine {
 
   #stopAll(): void {
     cancelAnimationFrame(this.#animFrameId);
-    // Stop all instruments
     for (const sf of this.#instruments.values()) {
       sf.stop();
     }
+    this.#percussionInstrument?.stop();
   }
 
   #setState(state: PlaybackState): void {
@@ -285,6 +276,14 @@ export class AudioEngine {
     const tick = () => {
       if (this.#state !== 'playing') return;
       const current = ctx.currentTime - this.#startTime;
+
+      // Fire position update via binary search
+      const pos = this.#scheduler.getPositionAtTime(current);
+      if (pos) {
+        for (const l of this.#listeners) {
+          l.onPositionUpdate?.(pos.measureIndex, pos.noteIndex);
+        }
+      }
 
       for (const l of this.#listeners) {
         l.onTimeUpdate?.(current, this.#totalTime);
@@ -305,5 +304,6 @@ export class AudioEngine {
     this.#audioContext?.close();
     this.#audioContext = null;
     this.#instruments.clear();
+    this.#percussionInstrument = null;
   }
 }
