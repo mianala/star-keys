@@ -1,32 +1,54 @@
 import { useEditor } from '@/stores/EditorContext.tsx';
 import type { NoteDuration, ArticulationType, OrnamentType } from '@/types/index.ts';
+import {
+  WholeNoteIcon,
+  HalfNoteIcon,
+  QuarterNoteIcon,
+  EighthNoteIcon,
+  SixteenthNoteIcon,
+  ThirtySecondNoteIcon,
+  RestIcon,
+  SharpIcon,
+  FlatIcon,
+  NaturalIcon,
+  TieIcon,
+  StaccatoIcon,
+  AccentIcon,
+  MarcatoIcon,
+  TenutoIcon,
+  FermataIcon,
+  TrillIcon,
+  MordentIcon,
+  TurnIcon,
+  TremoloIcon,
+} from './icons.tsx';
 
-const DURATIONS: { label: string; value: NoteDuration; key: string }[] = [
-  { label: '𝅝', value: 'whole', key: '1' },
-  { label: '𝅗𝅥', value: 'half', key: '2' },
-  { label: '♩', value: 'quarter', key: '3' },
-  { label: '♪', value: 'eighth', key: '4' },
-  { label: '𝅘𝅥𝅯', value: '16th', key: '5' },
-  { label: '𝅘𝅥𝅰', value: '32nd', key: '6' },
+const DURATIONS: { icon: React.ReactNode; value: NoteDuration; key: string }[] = [
+  { icon: <WholeNoteIcon />, value: 'whole', key: '1' },
+  { icon: <HalfNoteIcon />, value: 'half', key: '2' },
+  { icon: <QuarterNoteIcon />, value: 'quarter', key: '3' },
+  { icon: <EighthNoteIcon />, value: 'eighth', key: '4' },
+  { icon: <SixteenthNoteIcon />, value: '16th', key: '5' },
+  { icon: <ThirtySecondNoteIcon />, value: '32nd', key: '6' },
 ];
 
-const ARTICULATIONS: { label: string; value: ArticulationType; title: string }[] = [
-  { label: '·', value: 'staccato', title: 'Staccato' },
-  { label: '>', value: 'accent', title: 'Accent' },
-  { label: '^', value: 'marcato', title: 'Marcato' },
-  { label: '—', value: 'tenuto', title: 'Tenuto' },
-  { label: '𝄐', value: 'fermata', title: 'Fermata' },
+const ARTICULATIONS: { icon: React.ReactNode; value: ArticulationType; title: string }[] = [
+  { icon: <StaccatoIcon />, value: 'staccato', title: 'Staccato' },
+  { icon: <AccentIcon />, value: 'accent', title: 'Accent' },
+  { icon: <MarcatoIcon />, value: 'marcato', title: 'Marcato' },
+  { icon: <TenutoIcon />, value: 'tenuto', title: 'Tenuto' },
+  { icon: <FermataIcon />, value: 'fermata', title: 'Fermata' },
 ];
 
-const ORNAMENTS: { label: string; value: OrnamentType; title: string }[] = [
-  { label: 'tr', value: 'trill', title: 'Trill' },
-  { label: '𝆖', value: 'mordent', title: 'Mordent' },
-  { label: '𝆗', value: 'inverted-mordent', title: 'Inverted Mordent' },
-  { label: '𝆗', value: 'turn', title: 'Turn' },
-  { label: '𝆘', value: 'inverted-turn', title: 'Inverted Turn' },
-  { label: '≋1', value: 'tremolo-1', title: 'Tremolo (1 beam)' },
-  { label: '≋2', value: 'tremolo-2', title: 'Tremolo (2 beams)' },
-  { label: '≋3', value: 'tremolo-3', title: 'Tremolo (3 beams)' },
+const ORNAMENTS: { icon: React.ReactNode; value: OrnamentType; title: string }[] = [
+  { icon: <TrillIcon />, value: 'trill', title: 'Trill' },
+  { icon: <MordentIcon />, value: 'mordent', title: 'Mordent' },
+  { icon: <MordentIcon />, value: 'inverted-mordent', title: 'Inverted Mordent' },
+  { icon: <TurnIcon />, value: 'turn', title: 'Turn' },
+  { icon: <TurnIcon />, value: 'inverted-turn', title: 'Inverted Turn' },
+  { icon: <TremoloIcon beams={1} />, value: 'tremolo-1', title: 'Tremolo (1 beam)' },
+  { icon: <TremoloIcon beams={2} />, value: 'tremolo-2', title: 'Tremolo (2 beams)' },
+  { icon: <TremoloIcon beams={3} />, value: 'tremolo-3', title: 'Tremolo (3 beams)' },
 ];
 
 interface ToolbarProps {
@@ -55,7 +77,7 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
             aria-label={`${d.value} note duration`}
             aria-pressed={editorState.selectedDuration === d.value}
           >
-            {d.label}
+            {d.icon}
           </button>
         ))}
       </div>
@@ -80,7 +102,7 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
           aria-label="Rest input tool"
           aria-pressed={editorState.activeTool === 'rest'}
         >
-          𝄾
+          <RestIcon />
         </button>
         <button
           className={`toolbar-btn ${editorState.activeTool === 'select' ? 'active' : ''}`}
@@ -89,7 +111,7 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
           aria-label="Selection tool"
           aria-pressed={editorState.activeTool === 'select'}
         >
-          ↖
+          S
         </button>
       </div>
 
@@ -98,10 +120,18 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
       <div className="toolbar-group" role="group" aria-label="Note modifiers">
         <span className="toolbar-label">Modify</span>
         <button className="toolbar-btn" title="Dot (.)" aria-label="Toggle dot" onClick={onDot}>.</button>
-        <button className="toolbar-btn" title="Sharp (+)" aria-label="Sharpen note" onClick={onSharp}>♯</button>
-        <button className="toolbar-btn" title="Flat (-)" aria-label="Flatten note" onClick={onFlat}>♭</button>
-        <button className="toolbar-btn" title="Natural" aria-label="Natural" onClick={onNatural}>♮</button>
-        <button className="toolbar-btn" title="Tie (T)" aria-label="Toggle tie" onClick={onTie}>⁀</button>
+        <button className="toolbar-btn" title="Sharp (+)" aria-label="Sharpen note" onClick={onSharp}>
+          <SharpIcon />
+        </button>
+        <button className="toolbar-btn" title="Flat (-)" aria-label="Flatten note" onClick={onFlat}>
+          <FlatIcon />
+        </button>
+        <button className="toolbar-btn" title="Natural" aria-label="Natural" onClick={onNatural}>
+          <NaturalIcon />
+        </button>
+        <button className="toolbar-btn" title="Tie (T)" aria-label="Toggle tie" onClick={onTie}>
+          <TieIcon />
+        </button>
       </div>
 
       <div className="toolbar-separator" />
@@ -116,7 +146,7 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
             aria-label={a.title}
             onClick={() => onArticulation?.(a.value)}
           >
-            {a.label}
+            {a.icon}
           </button>
         ))}
       </div>
@@ -132,9 +162,8 @@ export function Toolbar({ onArticulation, onOrnament, onDot, onSharp, onFlat, on
             title={o.title}
             aria-label={o.title}
             onClick={() => onOrnament?.(o.value)}
-            style={{ fontSize: 10 }}
           >
-            {o.label}
+            {o.icon}
           </button>
         ))}
       </div>

@@ -26,3 +26,9 @@ body,
   width: 100%;
   overflow: hidden;
 }
+
+/* Music notation symbols font support - Noto Music loaded from Google Fonts */
+.music-symbol {
+  font-family: 'Noto Music', 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif;
+  font-feature-settings: 'liga' 1;
+}
